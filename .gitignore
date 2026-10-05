@@ -1,0 +1,8 @@
+# SQLite / Temp DB
+*.db
+*.db-journal
+*.log
+
+# Temp / OS files
+.DS_Store
+Thumbs.db
