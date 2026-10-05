@@ -9,13 +9,16 @@ AGENTS_FILE="$REPO_DIR/AGENTS.md"
 PROVISION_SCRIPT="$REPO_DIR/provision_dumbphone.sh"
 REVERT_SCRIPT="$REPO_DIR/revert_dumbphone.sh"
 
-ADB="${ADB:-$(command -v adb || echo /mnt/d/platform-tools/adb.exe)}"
+ADB="${ADB:-$(command -v adb 2>/dev/null || echo /mnt/d/platform-tools/adb.exe)}"
 
 usage() {
     cat <<EOF
 Usage: $0 <command> [options]
 
 Commands:
+  poc       Record a PoC experiment trial with Pros, Cons, and Verdict
+            Options: --name "<title>" --pros "<pros>" --cons "<cons>" [--verdict "<verdict>"] [--notes "<notes>"]
+
   package   Add a package to be stripped or preserved
             Options: --pkg <id> --action <remove|preserve|restore> --category <cat> [--reason <why>]
 
@@ -28,6 +31,7 @@ Commands:
   audit     Inspect connected Android device for 3rd-party packages and compare with AGENTS.md
 
 Examples:
+  $0 poc --name "Grayscale Daltonizer vs Bedtime Mode" --pros "System-wide, zero battery drain" --cons "Hard to read transit maps" --verdict "Adopted"
   $0 package --pkg com.reddit.frontpage --action remove --category "Social Media" --reason "Infinite scroll"
   $0 setting --ns secure --key doze_enabled --val 1 --desc "Enable ambient display doze"
   $0 note --text "Discovered Android 11+ permission grant for notification listener."
@@ -37,6 +41,39 @@ EOF
 }
 
 TIMESTAMP="$(date '+%Y-%m-%d %H:%M:%S')"
+
+cmd_poc() {
+    local name="" pros="" cons="" verdict="Under Evaluation" notes=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --name) name="$2"; shift 2 ;;
+            --pros) pros="$2"; shift 2 ;;
+            --cons) cons="$2"; shift 2 ;;
+            --verdict) verdict="$2"; shift 2 ;;
+            --notes) notes="$2"; shift 2 ;;
+            *) echo "Unknown option $1"; usage ;;
+        esac
+    done
+
+    if [[ -z "$name" || -z "$pros" || -z "$cons" ]]; then
+        echo "Error: --name, --pros, and --cons are required for PoC tracking."
+        exit 1
+    fi
+
+    echo "Recording PoC trial: $name..."
+
+    # Append to AGENTS.md Ledger
+    cat >> "$AGENTS_FILE" <<EOF
+
+- **[$TIMESTAMP] PoC Trial: $name**
+  - **Verdict**: \`$verdict\`
+  - **Pros (+)**: $pros
+  - **Cons (-)**: $cons
+  - **Engineering Notes**: ${notes:-"Trial conducted during dumbphone POC."}
+EOF
+
+    echo "Successfully appended PoC trial to $AGENTS_FILE."
+}
 
 cmd_package() {
     local pkg="" action="remove" category="General" reason=""
@@ -142,6 +179,7 @@ cmd_audit() {
 }
 
 case "${1:-}" in
+    poc)     shift; cmd_poc "$@" ;;
     package) shift; cmd_package "$@" ;;
     setting) shift; cmd_setting "$@" ;;
     note)    shift; cmd_note "$@" ;;
