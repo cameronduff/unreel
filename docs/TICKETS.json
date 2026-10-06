@@ -1,0 +1,155 @@
+[
+  {
+    "id": "3f09da56-a0de-8130-9942-c54a8942590b",
+    "url": "https://app.notion.com/p/UNR-17-Configure-Release-Build-Packaging-and-F-Droid-Metadata-3f09da56a0de81309942c54a8942590b",
+    "title": "[UNR-17] Configure Release Build Packaging and F-Droid Metadata",
+    "status": "Done",
+    "priority": "P1 - High",
+    "area": "Packaging",
+    "type": "Infra"
+  },
+  {
+    "id": "3f09da56-a0de-810d-9fe6-df1889ff94a6",
+    "url": "https://app.notion.com/p/UNR-16-Implement-Security-Audit-Test-Enforcing-Zero-Network-Permissions-3f09da56a0de810d9fe6df1889ff94a6",
+    "title": "[UNR-16] Implement Security Audit Test Enforcing Zero Network Permissions",
+    "status": "Done",
+    "priority": "P1 - High",
+    "area": "Packaging",
+    "type": "TDD / Test"
+  },
+  {
+    "id": "3f09da56-a0de-817e-92cc-c54727f54881",
+    "url": "https://app.notion.com/p/UNR-15-Implement-Touch-Absorber-Floating-Window-Overlay-Service-3f09da56a0de817e92ccc54727f54881",
+    "title": "[UNR-15] Implement Touch Absorber Floating Window Overlay Service",
+    "status": "Done",
+    "priority": "P2 - Medium",
+    "area": "Overlay",
+    "type": "Feature"
+  },
+  {
+    "id": "3f09da56-a0de-81c2-99c4-d450e1d6c53b",
+    "url": "https://app.notion.com/p/UNR-14-Implement-Touch-Absorber-Screen-Coordinate-Calculator-3f09da56a0de81c299c4d450e1d6c53b",
+    "title": "[UNR-14] Implement Touch Absorber Screen Coordinate Calculator",
+    "status": "Done",
+    "priority": "P2 - Medium",
+    "area": "Overlay",
+    "type": "Core / Engine"
+  },
+  {
+    "id": "3f09da56-a0de-815b-a04a-eb936762ab4d",
+    "url": "https://app.notion.com/p/UNR-13-Implement-Quick-Settings-Tile-for-15-Minute-Pause-Toggle-3f09da56a0de815ba04aeb936762ab4d",
+    "title": "[UNR-13] Implement Quick Settings Tile for 15-Minute Pause Toggle",
+    "status": "Done",
+    "priority": "P2 - Medium",
+    "area": "Core / Engine",
+    "type": "Feature"
+  },
+  {
+    "id": "3f09da56-a0de-8107-9203-ede1248f1200",
+    "url": "https://app.notion.com/p/UNR-12-Implement-Dashboard-Screen-with-Live-Reels-Counter-and-Pause-Timer-3f09da56a0de81079203ede1248f1200",
+    "title": "[UNR-12] Implement Dashboard Screen with Live Reels Counter and Pause Timer",
+    "status": "Done",
+    "priority": "P2 - Medium",
+    "area": "UI / Dashboard",
+    "type": "Feature"
+  },
+  {
+    "id": "3f09da56-a0de-816f-90be-d92b17fa2098",
+    "url": "https://app.notion.com/p/UNR-11-Implement-Onboarding-Screen-for-Accessibility-Permission-Grant-3f09da56a0de816f90bed92b17fa2098",
+    "title": "[UNR-11] Implement Onboarding Screen for Accessibility Permission Grant",
+    "status": "Done",
+    "priority": "P2 - Medium",
+    "area": "UI / Dashboard",
+    "type": "Feature"
+  },
+  {
+    "id": "3f09da56-a0de-81c1-bc26-e8a0014b6613",
+    "url": "https://app.notion.com/p/UNR-10-Implement-System-Accessibility-Settings-Intent-Factory-3f09da56a0de81c1bc26e8a0014b6613",
+    "title": "[UNR-10] Implement System Accessibility Settings Intent Factory",
+    "status": "Done",
+    "priority": "P1 - High",
+    "area": "UI / Dashboard",
+    "type": "Feature"
+  },
+  {
+    "id": "3f09da56-a0de-81c9-b219-d7593007d8df",
+    "url": "https://app.notion.com/p/UNR-09-Implement-Accessibility-Service-Status-Checker-3f09da56a0de81c9b219d7593007d8df",
+    "title": "[UNR-09] Implement Accessibility Service Status Checker",
+    "status": "Done",
+    "priority": "P1 - High",
+    "area": "UI / Dashboard",
+    "type": "Feature"
+  },
+  {
+    "id": "3f09da56-a0de-815f-b0b6-dfd0ff6b0555",
+    "url": "https://app.notion.com/p/UNR-08-Implement-Preferences-DataStore-Repository-for-Reels-Filter-State-3f09da56a0de815fb0b6dfd0ff6b0555",
+    "title": "[UNR-08] Implement Preferences DataStore Repository for Reels Filter State",
+    "status": "Done",
+    "priority": "P1 - High",
+    "area": "Core / Engine",
+    "type": "Feature"
+  },
+  {
+    "id": "3f09da56-a0de-81e7-b41f-f7d6c43c71be",
+    "url": "https://app.notion.com/p/UNR-07-Implement-Room-Database-and-DAO-for-Local-Intercept-Telemetry-3f09da56a0de81e7b41ff7d6c43c71be",
+    "title": "[UNR-07] Implement Room Database and DAO for Local Intercept Telemetry",
+    "status": "Done",
+    "priority": "P1 - High",
+    "area": "Telemetry",
+    "type": "Feature"
+  },
+  {
+    "id": "3f09da56-a0de-81e2-b902-f001bd6af7b0",
+    "url": "https://app.notion.com/p/UNR-06-Implement-UnreelAccessibilityService-Event-Loop-3f09da56a0de81e2b902f001bd6af7b0",
+    "title": "[UNR-06] Implement UnreelAccessibilityService Event Loop",
+    "status": "Done",
+    "priority": "P0 - Blocker",
+    "area": "Accessibility",
+    "type": "Feature"
+  },
+  {
+    "id": "3f09da56-a0de-81a0-a848-e42595b0c6d6",
+    "url": "https://app.notion.com/p/UNR-05-Implement-Debounced-Global-Back-Action-Dispatcher-3f09da56a0de81a0a848e42595b0c6d6",
+    "title": "[UNR-05] Implement Debounced Global Back Action Dispatcher",
+    "status": "Done",
+    "priority": "P0 - Blocker",
+    "area": "Core / Engine",
+    "type": "Core / Engine"
+  },
+  {
+    "id": "3f09da56-a0de-8138-8dac-fa89cfaee77e",
+    "url": "https://app.notion.com/p/UNR-04-Implement-Bottom-Navigation-Reels-Tab-Detector-3f09da56a0de81388dacfa89cfaee77e",
+    "title": "[UNR-04] Implement Bottom Navigation Reels Tab Detector",
+    "status": "Done",
+    "priority": "P0 - Blocker",
+    "area": "Core / Engine",
+    "type": "TDD / Test"
+  },
+  {
+    "id": "3f09da56-a0de-81f7-ac00-fd045c43763a",
+    "url": "https://app.notion.com/p/UNR-03-Implement-Full-Screen-Reels-Clips-Container-Detector-3f09da56a0de81f7ac00fd045c43763a",
+    "title": "[UNR-03] Implement Full-Screen Reels Clips Container Detector",
+    "status": "Done",
+    "priority": "P0 - Blocker",
+    "area": "Core / Engine",
+    "type": "TDD / Test"
+  },
+  {
+    "id": "3f09da56-a0de-81a5-a0e5-ce6e9d16ca84",
+    "url": "https://app.notion.com/p/UNR-02-Configure-Robolectric-Test-Runner-and-Accessibility-Node-Mocking-Harness-3f09da56a0de81a5a0e5ce6e9d16ca84",
+    "title": "[UNR-02] Configure Robolectric Test Runner and Accessibility Node Mocking Harness",
+    "status": "Done",
+    "priority": "P0 - Blocker",
+    "area": "Core / Engine",
+    "type": "Infra"
+  },
+  {
+    "id": "3f09da56-a0de-8145-a2f1-d7ee277a6c80",
+    "url": "https://app.notion.com/p/UNR-01-Initialize-Android-Gradle-Project-Structure-with-Version-Catalogs-3f09da56a0de8145a2f1d7ee277a6c80",
+    "title": "[UNR-01] Initialize Android Gradle Project Structure with Version Catalogs",
+    "status": "Done",
+    "priority": "P0 - Blocker",
+    "area": "Core / Engine",
+    "type": "Infra"
+  }
+]

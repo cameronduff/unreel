@@ -1,0 +1,37 @@
+Categories:
+  - System
+  - Security
+License: GPL-3.0-only
+AuthorName: Unreel Contributors
+SourceCode: https://github.com/cameronduff/unreel
+IssueTracker: https://github.com/cameronduff/unreel/issues
+
+Summary: High-performance Instagram Reels eliminator with zero network permissions
+
+Description: |
+  Unreel is a client-side Android companion engineered to eliminate Instagram Reels
+  in under 16 milliseconds while preserving native 120Hz scrolling, direct messaging,
+  and camera functionality.
+
+  Features:
+  - Sub-16ms Reels Interception via Accessibility Service
+  - Zero Network Permissions (no internet access guaranteed by OS)
+  - Quick Settings Tile for temporary 15-minute pause
+  - On-device local intercept telemetry with Room SQLite
+  - AMOLED pure dark dashboard with time saved counter
+
+RepoType: git
+Repo: https://github.com/cameronduff/unreel.git
+
+Builds:
+  - versionName: 1.0.0
+    versionCode: 1
+    commit: v1.0.0
+    subdir: app
+    gradle:
+      - yes
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+CurrentVersion: 1.0.0
+CurrentVersionCode: 1

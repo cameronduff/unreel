@@ -6,3 +6,7 @@
 # Temp / OS files
 .DS_Store
 Thumbs.db
+local.properties
+.gradle/
+build/
+app/build/

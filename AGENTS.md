@@ -297,3 +297,54 @@ To ensure this PoC knowledge base never becomes stale, all changes to this repos
 - **[2026-10-05 20:28:53] Discovery / Engineering Note**:
   - Verified wrapper in ~/.local/bin/adb for non-interactive WSL shell execution.
 - **[2026-10-05 20:30:00] PoC Trade-Off Formalization**: Formatted comprehensive Pros & Cons analysis matrix across debloating strategies, display grayscale modes, minimal launchers, and screen lock policies.
+
+- **[2026-10-05 20:43:11] Discovery / Engineering Note**:
+  - Researched SocialLite & architected Unreel native Android Reels-killer companion. Published PRD to Notion and docs/PRD.md.
+
+---
+
+## 9. Unreel Project: Notion Database, Ticket Schema & Status Lifecycle
+
+### 9.1 Notion Workspace & Database Configuration
+* **Project Space Page:** [Unreel Project Space](https://app.notion.com/p/Unreel-Open-Source-Distraction-Reels-Eliminator-3f09da56a0de81268bc8fabee329995d) (`3f09da56-a0de-8126-8bc8-fabee329995d`)
+* **PRD Document:** [Product Requirements Document (PRD): Unreel v1.0](https://app.notion.com/p/Product-Requirements-Document-PRD-Unreel-v1-0-3f09da56a0de81299f18d92bc76395a6) (`3f09da56-a0de-8129-9f18-d92bc76395a6`)
+* **Engineering Roadmap & Tickets Database ID:** `3f09da56-a0de-819a-ab73-fe3c30394233`
+* **Engineering Roadmap & Tickets URL:** [Unreel Tickets Board](https://app.notion.com/p/3f09da56a0de819aab73fe3c30394233)
+
+### 9.2 Ticket Status Lifecycle
+* **`Draft`**: Requirements under formulation, unresolved architectural questions, or missing verification commands.
+* **`Ready for SWE`**: Strictly gated. All required fields are verified, acceptance criteria are concrete and testable, unit/integration verification command is defined, and dependencies are resolved.
+* **`In Progress`**: Active implementation in branch.
+* **`Done`**: All acceptance criteria pass, regression tests verified via `./gradlew test` or instrumented test runner.
+
+### 9.3 Ticket Schema & Required Fields
+Every ticket created in the database MUST contain:
+1. **Title:** Imperative, specific, prefixed with ID: `[OL-XX] <Title>`.
+2. **Properties:**
+   - `Name`: String title.
+   - `Status`: `Ready for SWE` (or `Draft`).
+   - `Priority`: `P0 - Blocker` | `P1 - High` | `P2 - Medium` | `P3 - Low`.
+   - `Type`: `Epic` | `Feature` | `TDD / Test` | `Infra`.
+   - `Area`: `Core / Engine` | `Accessibility` | `Overlay` | `UI / Dashboard` | `Telemetry` | `Packaging`.
+3. **Page Body Content:**
+   - **Scope:** In-scope and out-of-scope boundaries (under 250 words).
+   - **Target files/directories:** Verified repo paths; mark new paths as `(new)`.
+   - **Acceptance Criteria:** Pass/fail checklist including null/empty, boundary, and edge conditions.
+   - **Verification command:** Exact CLI command to prove completion (e.g. `./gradlew testDebugUnitTest --tests "...""`).
+   - **Dependencies:** Explicit list ("Blocked by: [OL-YY]" or "None").
+
+- **[2026-10-05 20:47:50] Discovery / Engineering Note**:
+  - Created Unreel tickets database in Notion (3f09da56-a0de-819a-ab73-fe3c30394233) with 11 Ready for SWE tickets and 2 Draft tickets, scoped strictly to Instagram Reels elimination.
+
+- **[2026-10-05 20:55:11] Discovery / Engineering Note**:
+  - Refactored Unreel tickets into 17 ultra-atomic, single-concern, SWE-ready tickets in Notion database (3f09da56-a0de-819a-ab73-fe3c30394233) strictly scoped to Instagram Reels eradication.
+
+- **[2026-10-05 20:56:16] Discovery / Engineering Note**:
+  - Synchronized repository base and Notion workspace to 'Unreel' (cameronduff/unreel.git) across 17 atomic tickets, PRD, and database.
+
+- **[2026-10-05 21:43:30] Discovery / Engineering Note**:
+  - Implemented tickets [UNR-01] through [UNR-10]: Scaffolding, Robolectric harness, Reels detectors, debounced back dispatcher, AccessibilityService event loop, Room database, DataStore repository, and accessibility intent/status helpers. All 42 unit/integration tests passing (100%).
+
+- **[2026-10-05 22:24:00] Discovery / Engineering Note**:
+  - Completed all 17 atomic tickets [UNR-01] through [UNR-17] for Unreel v1.0. Implemented OnboardingScreen & ViewModel, Dashboard AMOLED screen with countdown pause timer, UnreelTileService Quick Settings 15m toggle, TouchAbsorber OverlayPositionCalculator & TouchAbsorberOverlayService floating touch sink, ZeroNetworkSecurityAuditTest enforcing zero network permissions, and R8-shrunk release APK packaging (769 KB, well under 3.5 MB limit) with F-Droid YAML metadata and GitHub Actions CI workflow. All 66 unit/integration/security tests passing (100%), lint clean.
+

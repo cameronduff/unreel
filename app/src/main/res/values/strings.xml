@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Unreel</string>
+    <string name="tile_label">Unreel</string>
+    <string name="accessibility_service_description">Unreel monitors Instagram in real time to eliminate Reels and short-form video dopamine loops, bouncing back to your feed or inbox within 16ms.</string>
+</resources>
