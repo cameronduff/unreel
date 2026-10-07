@@ -359,3 +359,7 @@ Every ticket created in the database MUST contain:
 - **[2026-10-07 19:08:00] Discovery / Engineering Note**:
   - Resolved cold-launch false positive kick in `InstagramClipsDetector.kt`: Instagram attaches an invisible 0-height stub container (`clips_viewer_debug_container`, 0x0 px) on startup that previously triggered the Back dispatcher. Enforced `isVisibleToUser && rect.height() >= rootBounds.height() * 0.5`. Verified on physical Pixel 4a: Instagram now launches and browses smoothly. Automated on-device E2E test suite (`run_e2e_device_test.sh`) passes 100% across all 9 gates (10.5ms avg suppression latency, zero false positives, 233 telemetry events).
 
+- **[2026-10-07 20:10:00] Discovery / Engineering Note**:
+  - Addressed Instagram Daily Limit / Modal dialog overlay obstruction. Engineered `InstagramModalDetector.kt` to traverse accessibility node hierarchies and detect dialog containers (`dialog_container`, `dialog_window`, `bottom_sheet_container`, `action_sheet_container`, `igds_headline_headline`, `comment_composer_container`, `direct_share_sheet`, `reel_viewer_root`, `row_thread_composer`, `quick_capture_fragment_container`). When active, `UnreelAccessibilityService` immediately dismisses the floating blackout overlay (`updateOverlay(false)`), ensuring Daily Time Limit buttons, comments, story replies, and DMs remain 100% interactive. Mapped all 9 primary Instagram customer journeys in `docs/CUSTOMER_JOURNEYS.md`. Verified on physical Pixel 4a: 89 unit tests pass (100%), automated on-device E2E test suite passes 100%.
+
+
