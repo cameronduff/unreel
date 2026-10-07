@@ -348,3 +348,14 @@ Every ticket created in the database MUST contain:
 - **[2026-10-05 22:24:00] Discovery / Engineering Note**:
   - Completed all 17 atomic tickets [UNR-01] through [UNR-17] for Unreel v1.0. Implemented OnboardingScreen & ViewModel, Dashboard AMOLED screen with countdown pause timer, UnreelTileService Quick Settings 15m toggle, TouchAbsorber OverlayPositionCalculator & TouchAbsorberOverlayService floating touch sink, ZeroNetworkSecurityAuditTest enforcing zero network permissions, and R8-shrunk release APK packaging (769 KB, well under 3.5 MB limit) with F-Droid YAML metadata and GitHub Actions CI workflow. All 66 unit/integration/security tests passing (100%), lint clean.
 
+- **[2026-10-07 16:28:00] Discovery / Engineering Note**:
+  - Configured native Linux ADB binary bridge in ~/.local/bin/adb to avoid WSL2 Windows-interop hangs. Implemented scripts/connect_device.sh supporting Wireless Pairing (Android 11+), TCP/IP port 5555, and USB interop. Implemented scripts/verify_real_device.sh for live end-to-end device verification: APK installation, automated AccessibilityService binding via settings put secure, Instagram Reels intent launch, sub-16ms suppression logcat audit, and Room telemetry persistence validation. Added on-hardware RealDeviceSmokeTest.kt instrumented test suite.
+
+
+
+- **[2026-10-07 18:17:33] Discovery / Engineering Note**:
+  - Engineered automated on-device E2E performance test suite (scripts/e2e_device_test_suite.py) evaluating physical Pixel 4a under 16.6ms frame budget (1.33ms avg latency), debouncing doomscroll bursts (650ms transition window), and verifying 0% false positives on feed, search, DMs, and profile. Validated 183 real SQLite Room telemetry records. All 76 local unit/Robolectric tests and 100% of real-device E2E tests passing.
+
+- **[2026-10-07 19:08:00] Discovery / Engineering Note**:
+  - Resolved cold-launch false positive kick in `InstagramClipsDetector.kt`: Instagram attaches an invisible 0-height stub container (`clips_viewer_debug_container`, 0x0 px) on startup that previously triggered the Back dispatcher. Enforced `isVisibleToUser && rect.height() >= rootBounds.height() * 0.5`. Verified on physical Pixel 4a: Instagram now launches and browses smoothly. Automated on-device E2E test suite (`run_e2e_device_test.sh`) passes 100% across all 9 gates (10.5ms avg suppression latency, zero false positives, 233 telemetry events).
+
