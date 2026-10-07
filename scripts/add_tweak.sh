@@ -6,8 +6,6 @@ set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 AGENTS_FILE="$REPO_DIR/AGENTS.md"
-PROVISION_SCRIPT="$REPO_DIR/provision_dumbphone.sh"
-REVERT_SCRIPT="$REPO_DIR/revert_dumbphone.sh"
 
 ADB="${ADB:-$(command -v adb 2>/dev/null || echo /mnt/d/platform-tools/adb.exe)}"
 
