@@ -69,8 +69,16 @@ class UnreelAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
         val pkg = event.packageName?.toString()
+
+        // 1. Never detach or process events from our own overlay window or SystemUI
+        if (pkg == null || pkg == "org.unreel.android" || pkg == "com.android.systemui") {
+            return
+        }
+
+        // 2. Hide overlay when switching away from Instagram to another app
         if (pkg != TARGET_INSTAGRAM_PACKAGE) {
             if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+                Log.d(TAG, "Navigated away from Instagram to $pkg, hiding overlay")
                 updateOverlay(false)
             }
             return
@@ -81,16 +89,17 @@ class UnreelAccessibilityService : AccessibilityService() {
             return
         }
 
-        val root = resolveRootInActiveWindow() ?: return
-        val rootCompat = AccessibilityNodeInfoCompat.wrap(root)
+        val root = resolveRootInActiveWindow()
+        val rootCompat = if (root != null) AccessibilityNodeInfoCompat.wrap(root) else null
 
-        // 1. Maintain blackout touch-absorber overlay over the Reels tab button
+        // 3. Maintain blackout touch-absorber overlay over the Reels tab button
         val reelsBounds = InstagramBottomNavDetector.findReelsTabBounds(rootCompat)
-        if (reelsBounds != null) {
-            updateOverlay(true, reelsBounds)
-        }
+        Log.d(TAG, "Instagram active in foreground, reelsBounds=$reelsBounds")
+        updateOverlay(true, reelsBounds)
 
-        // 2. Intercept active Reels tab selection or fullscreen clips viewer
+        if (rootCompat == null) return
+
+        // 4. Intercept active Reels tab selection or fullscreen clips viewer
         val isClipsVisible = InstagramClipsDetector.isClipsContainerVisible(rootCompat)
         val isReelsTabSelected = InstagramBottomNavDetector.isReelsTabSelected(rootCompat)
 

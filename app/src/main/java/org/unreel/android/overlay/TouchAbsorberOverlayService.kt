@@ -51,6 +51,8 @@ class TouchAbsorberOverlayService : Service() {
                 navBarHeightPx = navBarHeight
             )
 
+        android.util.Log.i("TouchAbsorber", "attachOverlay requested: targetRect=$targetRect, calculated=$rect, isAttached=$isOverlayAttached")
+
         if (isOverlayAttached && overlayView != null) {
             if (currentBounds == rect) {
                 return true
@@ -62,9 +64,14 @@ class TouchAbsorberOverlayService : Service() {
                 params.y = rect.top
                 params.width = rect.width()
                 params.height = rect.height()
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    params.fitInsetsTypes = 0
+                }
                 windowManager.updateViewLayout(overlayView, params)
+                android.util.Log.i("TouchAbsorber", "Updated overlay layout to $rect")
                 return true
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                android.util.Log.e("TouchAbsorber", "Failed to update overlay view layout", e)
                 return false
             }
         }
@@ -88,12 +95,19 @@ class TouchAbsorberOverlayService : Service() {
             gravity = Gravity.TOP or Gravity.START
             x = rect.left
             y = rect.top
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                fitInsetsTypes = 0
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+            }
         }
 
         val view = View(this).apply {
-            setBackgroundColor(Color.BLACK)
+            setBackgroundColor(Color.parseColor("#0D1014"))
             setOnTouchListener { _, event ->
                 if (event.action == MotionEvent.ACTION_DOWN) {
+                    android.util.Log.w("TouchAbsorber", "Absorbed touch on Reels tab position!")
                     onTouchAbsorbed?.invoke()
                     true
                 } else {
@@ -107,18 +121,22 @@ class TouchAbsorberOverlayService : Service() {
             overlayView = view
             currentBounds = rect
             isOverlayAttached = true
+            android.util.Log.i("TouchAbsorber", "Successfully attached blackout overlay at $rect")
             return true
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            android.util.Log.e("TouchAbsorber", "Failed to add overlay view to WindowManager", e)
             return false
         }
     }
 
     fun detachOverlay() {
+        android.util.Log.i("TouchAbsorber", "detachOverlay called: isAttached=$isOverlayAttached")
         if (isOverlayAttached && overlayView != null) {
             try {
                 windowManager.removeView(overlayView)
-            } catch (_: Exception) {
-                // View might already be detached
+                android.util.Log.i("TouchAbsorber", "Overlay view removed from WindowManager")
+            } catch (e: Exception) {
+                android.util.Log.w("TouchAbsorber", "View might already be detached", e)
             } finally {
                 overlayView = null
                 currentBounds = null
@@ -129,6 +147,7 @@ class TouchAbsorberOverlayService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val action = intent?.action
+        android.util.Log.i("TouchAbsorber", "onStartCommand: action=$action")
         if (action == ACTION_DETACH) {
             detachOverlay()
         } else {
