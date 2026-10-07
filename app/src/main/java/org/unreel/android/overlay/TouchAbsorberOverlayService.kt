@@ -142,6 +142,7 @@ class TouchAbsorberOverlayService : Service() {
                 currentBounds = null
                 isOverlayAttached = false
             }
+            stopSelf()
         }
     }
 
@@ -159,7 +160,7 @@ class TouchAbsorberOverlayService : Service() {
             }
             attachOverlay(bounds)
         }
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     override fun onDestroy() {

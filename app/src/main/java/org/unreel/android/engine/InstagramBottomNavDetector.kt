@@ -164,4 +164,42 @@ object InstagramBottomNavDetector {
         // If bottom tab bar is not found, fallback to true
         return true
     }
+
+    /**
+     * Inspects the view hierarchy to check if Instagram is still displaying its startup
+     * splash screen / big logo, preventing premature blackout overlay attachment.
+     */
+    fun isSplashScreenShowing(rootNode: AccessibilityNodeInfoCompat?): Boolean {
+        if (rootNode == null) return false
+
+        val queue = ArrayDeque<AccessibilityNodeInfoCompat>()
+        queue.add(rootNode)
+        var visitedCount = 0
+
+        while (queue.isNotEmpty() && visitedCount < MAX_NODE_TRAVERSAL_LIMIT) {
+            val current = queue.poll() ?: continue
+            visitedCount++
+
+            val viewId = current.viewIdResourceName
+            val className = current.className?.toString()
+
+            if (viewId != null && (viewId.contains("splash", ignoreCase = true) || viewId.contains("loading", ignoreCase = true))) {
+                if (current.isVisibleToUser) {
+                    return true
+                }
+            }
+
+            if (className != null && (className.contains("SplashScreen", ignoreCase = true) || className.contains("IgSplashScreen", ignoreCase = true))) {
+                return true
+            }
+
+            val childCount = current.childCount
+            for (i in 0 until childCount) {
+                val child = current.getChild(i) ?: continue
+                queue.add(child)
+            }
+        }
+
+        return false
+    }
 }

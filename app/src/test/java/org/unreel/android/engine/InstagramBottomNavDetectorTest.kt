@@ -131,4 +131,30 @@ class InstagramBottomNavDetectorTest {
 
         assertTrue("Average execution duration ($avgDurationMs ms) should be <= 3ms", avgDurationMs <= 3L)
     }
+
+    @Test
+    fun testSplashScreenDetected() {
+        val splashRoot = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/splash_screen_container")
+            .setClassName("android.window.SplashScreenView")
+            .setVisibleToUser(true)
+            .build()
+
+        assertTrue(InstagramBottomNavDetector.isSplashScreenShowing(splashRoot))
+    }
+
+    @Test
+    fun testSplashScreenNotPresentOnNormalFeed() {
+        val feedRoot = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/main_feed")
+            .addChild(
+                MockAccessibilityNodeBuilder()
+                    .setViewId("com.instagram.android:id/title_logo")
+                    .setVisibleToUser(true)
+            )
+            .build()
+
+        assertFalse(InstagramBottomNavDetector.isSplashScreenShowing(feedRoot))
+        assertFalse(InstagramBottomNavDetector.isSplashScreenShowing(null))
+    }
 }
