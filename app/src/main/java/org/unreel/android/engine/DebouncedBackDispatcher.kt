@@ -43,6 +43,6 @@ class DebouncedBackDispatcher(
     }
 
     companion object {
-        const val DEFAULT_DEBOUNCE_WINDOW_MS = 300L
+        const val DEFAULT_DEBOUNCE_WINDOW_MS = 650L
     }
 }
