@@ -142,7 +142,6 @@ class TouchAbsorberOverlayService : Service() {
                 currentBounds = null
                 isOverlayAttached = false
             }
-            stopSelf()
         }
     }
 

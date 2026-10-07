@@ -39,15 +39,16 @@ class UnreelAccessibilityService : AccessibilityService() {
     private var lastOverlayBounds: android.graphics.Rect? = null
 
     private fun updateOverlay(show: Boolean, bounds: android.graphics.Rect? = null) {
-        if (overlayController != null) {
-            overlayController?.invoke(show, bounds)
-            return
-        }
         if (lastOverlayState == show && lastOverlayBounds == bounds) {
             return
         }
         lastOverlayState = show
         lastOverlayBounds = bounds
+
+        if (overlayController != null) {
+            overlayController?.invoke(show, bounds)
+            return
+        }
 
         if (show) {
             TouchAbsorberOverlayService.show(this, bounds)
@@ -105,22 +106,11 @@ class UnreelAccessibilityService : AccessibilityService() {
         val root = resolveRootInActiveWindow()
         val rootCompat = if (root != null) AccessibilityNodeInfoCompat.wrap(root) else null
 
-        // 3. Maintain blackout touch-absorber overlay over the Reels tab button
-        // Check if any modal dialog, daily limit prompt, bottom sheet, or splash screen is active
-        val isSplashShowing = InstagramBottomNavDetector.isSplashScreenShowing(rootCompat)
-        val isModalOpen = InstagramModalDetector.isModalOrDialogPresent(rootCompat)
-        val reelsBounds = if (!isModalOpen && !isSplashShowing) InstagramBottomNavDetector.findReelsTabBounds(rootCompat) else null
-        Log.d(TAG, "Instagram active in foreground: isSplash=$isSplashShowing, isModalOpen=$isModalOpen, reelsBounds=$reelsBounds")
-
-        if (reelsBounds != null) {
-            updateOverlay(true, reelsBounds)
-        } else {
-            updateOverlay(false)
-        }
-
         if (rootCompat == null) return
 
-        // 4. Intercept active Reels tab selection or fullscreen clips viewer
+        // 3. PRIORITY 0: Emergency Reels Interception
+        // If the user lands on a Reel or selects the Reels tab, suppress IMMEDIATELY via Back action
+        // before spending cycles on overlay/modal maintenance or IPC calls.
         val isClipsVisible = InstagramClipsDetector.isClipsContainerVisible(rootCompat)
         val isReelsTabSelected = InstagramBottomNavDetector.isReelsTabSelected(rootCompat)
 
@@ -138,6 +128,24 @@ class UnreelAccessibilityService : AccessibilityService() {
                 recordIntercept(trigger)
             }
             return
+        }
+
+        // 4. PRIORITY 1: Bottom Navigation Blackout Touch-Absorber Overlay
+        // Maintain blackout touch-absorber overlay over the Reels tab button
+        // Check if any modal dialog, daily limit prompt, bottom sheet, or splash screen is active
+        val isSplashShowing = if (lastOverlayBounds == null || event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            InstagramBottomNavDetector.isSplashScreenShowing(rootCompat)
+        } else {
+            false
+        }
+        val isModalOpen = InstagramModalDetector.isModalOrDialogPresent(rootCompat)
+        val reelsBounds = if (!isModalOpen && !isSplashShowing) InstagramBottomNavDetector.findReelsTabBounds(rootCompat) else null
+        Log.d(TAG, "Instagram active in foreground: isSplash=$isSplashShowing, isModalOpen=$isModalOpen, reelsBounds=$reelsBounds")
+
+        if (reelsBounds != null) {
+            updateOverlay(true, reelsBounds)
+        } else {
+            updateOverlay(false)
         }
 
         // 5. Auto-snooze suggested posts in feed (every 30 days)
