@@ -47,7 +47,7 @@ def logcat_clear():
     run_adb(["logcat", "-c"])
 
 def get_unreel_logs():
-    return run_adb(["logcat", "-d", "-s", "UnreelService", "UnreelClipsDetector", "UnreelNavDetector"], check=False)
+    return run_adb(["logcat", "-d", "-s", "UnreelService", "UnreelClipsDetector", "UnreelNavDetector", "TouchAbsorber"], check=False)
 
 def parse_suppression_latencies(log_text):
     """
@@ -223,9 +223,10 @@ class E2ETestRunner:
         time.sleep(1.5)
         logs = get_unreel_logs()
         dispatches = logs.count("Successfully dispatched Back Action")
-        # Ensure debouncer prevented event flooding (at least 1 dispatch, but not crashing or 100 loops)
-        passed = dispatches >= 1
-        detail = f"Dispatches executed under burst: {dispatches} (cleanly debounced without service crash)"
+        absorbed = logs.count("Absorbed touch on Reels tab position")
+        # Either touch absorber consumed the burst, or debouncer limited back dispatches
+        passed = (absorbed >= 1) or (dispatches >= 1)
+        detail = f"Absorbed: {absorbed}, Dispatches: {dispatches} (burst neutralized without service crash)"
         self.record_result("Rapid Doomscroll Tapping Debounce", passed, detail)
 
     def test_false_positive_protection(self):

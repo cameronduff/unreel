@@ -108,7 +108,7 @@ object InstagramBottomNavDetector {
                 (desc != null && desc.equals("Reels", ignoreCase = true)) ||
                 (text != null && text.equals("Reels", ignoreCase = true))
 
-            if (isMatch) {
+            if (isMatch && current.isVisibleToUser) {
                 val rect = android.graphics.Rect()
                 current.getBoundsInScreen(rect)
                 if (rect.width() > 0 && rect.height() > 0) {

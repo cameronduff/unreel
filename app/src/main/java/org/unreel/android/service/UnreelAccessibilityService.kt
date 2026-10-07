@@ -18,6 +18,7 @@ import org.unreel.android.data.UnreelDatabase
 import org.unreel.android.engine.DebouncedBackDispatcher
 import org.unreel.android.engine.InstagramBottomNavDetector
 import org.unreel.android.engine.InstagramClipsDetector
+import org.unreel.android.engine.InstagramModalDetector
 import org.unreel.android.overlay.TouchAbsorberOverlayService
 
 class UnreelAccessibilityService : AccessibilityService() {
@@ -93,9 +94,16 @@ class UnreelAccessibilityService : AccessibilityService() {
         val rootCompat = if (root != null) AccessibilityNodeInfoCompat.wrap(root) else null
 
         // 3. Maintain blackout touch-absorber overlay over the Reels tab button
-        val reelsBounds = InstagramBottomNavDetector.findReelsTabBounds(rootCompat)
-        Log.d(TAG, "Instagram active in foreground, reelsBounds=$reelsBounds")
-        updateOverlay(true, reelsBounds)
+        // Check if any modal dialog, daily limit prompt, or bottom sheet is active
+        val isModalOpen = InstagramModalDetector.isModalOrDialogPresent(rootCompat)
+        val reelsBounds = if (!isModalOpen) InstagramBottomNavDetector.findReelsTabBounds(rootCompat) else null
+        Log.d(TAG, "Instagram active in foreground: isModalOpen=$isModalOpen, reelsBounds=$reelsBounds")
+
+        if (reelsBounds != null) {
+            updateOverlay(true, reelsBounds)
+        } else {
+            updateOverlay(false)
+        }
 
         if (rootCompat == null) return
 

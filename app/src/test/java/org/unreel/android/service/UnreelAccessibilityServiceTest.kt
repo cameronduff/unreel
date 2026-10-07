@@ -214,4 +214,45 @@ class UnreelAccessibilityServiceTest {
         service.onAccessibilityEvent(event)
         assertEquals(false, lastOverlayShow)
     }
+
+    @Test
+    fun testWhenModalDialogPresentHidesOverlay() {
+        var lastOverlayShow: Boolean? = null
+        service.overlayController = { show, _ ->
+            lastOverlayShow = show
+        }
+
+        val modalRoot = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/main_layout")
+            .addChild(
+                MockAccessibilityNodeBuilder()
+                    .setViewId("com.instagram.android:id/dialog_container")
+                    .addChild(
+                        MockAccessibilityNodeBuilder()
+                            .setViewId("com.instagram.android:id/primary_button")
+                            .setText("OK")
+                    )
+            )
+            .addChild(
+                MockAccessibilityNodeBuilder()
+                    .setViewId("com.instagram.android:id/tab_bar")
+                    .addChild(
+                        MockAccessibilityNodeBuilder()
+                            .setViewId("com.instagram.android:id/clips_tab")
+                            .setContentDescription("Reels")
+                            .setBounds(android.graphics.Rect(216, 2142, 432, 2274))
+                    )
+            )
+            .build()
+
+        service.rootNodeProvider = { modalRoot.unwrap() as AccessibilityNodeInfo }
+
+        val event = AccessibilityEvent.obtain().apply {
+            packageName = UnreelAccessibilityService.TARGET_INSTAGRAM_PACKAGE
+            eventType = AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+        }
+
+        service.onAccessibilityEvent(event)
+        assertEquals(false, lastOverlayShow)
+    }
 }
