@@ -127,4 +127,41 @@ object InstagramBottomNavDetector {
 
         return null
     }
+
+    /**
+     * Inspects the view hierarchy to check if the main Feed / Home tab is currently selected.
+     */
+    fun isFeedTabActive(rootNode: AccessibilityNodeInfoCompat?): Boolean {
+        if (rootNode == null) return false
+
+        val queue = ArrayDeque<AccessibilityNodeInfoCompat>()
+        queue.add(rootNode)
+        var visitedCount = 0
+
+        while (queue.isNotEmpty() && visitedCount < MAX_NODE_TRAVERSAL_LIMIT) {
+            val current = queue.poll() ?: continue
+            visitedCount++
+
+            val viewId = current.viewIdResourceName
+            val desc = current.contentDescription?.toString()
+            val text = current.text?.toString()
+
+            val isFeedTab = (viewId != null && viewId.contains("feed_tab", ignoreCase = true)) ||
+                (desc != null && desc.equals("Home", ignoreCase = true)) ||
+                (text != null && text.equals("Home", ignoreCase = true))
+
+            if (isFeedTab) {
+                return current.isSelected
+            }
+
+            val childCount = current.childCount
+            for (i in 0 until childCount) {
+                val child = current.getChild(i) ?: continue
+                queue.add(child)
+            }
+        }
+
+        // If bottom tab bar is not found, fallback to true
+        return true
+    }
 }

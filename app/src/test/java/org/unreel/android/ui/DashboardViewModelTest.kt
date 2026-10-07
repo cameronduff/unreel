@@ -125,4 +125,20 @@ class DashboardViewModelTest {
 
         viewModel.resumeNow().join()
     }
+
+    @Test
+    fun testToggleAutoSnoozeEnabled() = runTest(testDispatcher) {
+        val initialState = viewModel.uiState.first()
+        assertTrue(initialState.isAutoSnoozeEnabled)
+
+        viewModel.setAutoSnoozeEnabled(false).join()
+        val disabledState = viewModel.uiState.first { !it.isAutoSnoozeEnabled }
+        assertFalse(disabledState.isAutoSnoozeEnabled)
+        assertFalse(preferencesRepository.isAutoSnoozeEnabled.first())
+
+        viewModel.setAutoSnoozeEnabled(true).join()
+        val enabledState = viewModel.uiState.first { it.isAutoSnoozeEnabled }
+        assertTrue(enabledState.isAutoSnoozeEnabled)
+        assertTrue(preferencesRepository.isAutoSnoozeEnabled.first())
+    }
 }

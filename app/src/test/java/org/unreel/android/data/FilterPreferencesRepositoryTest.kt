@@ -99,4 +99,30 @@ class FilterPreferencesRepositoryTest {
         assertEquals(0L, prefs.pauseUntilEpochMs)
         assertFalse(prefs.isPauseActive(currentEpochMs = baseTime))
     }
+
+    @Test
+    fun testAutoSnoozeDefaultAndToggle() = runTest(testDispatcher) {
+        val prefs = repository.filterPreferences.first()
+        assertTrue(prefs.isAutoSnoozeEnabled)
+        assertEquals(0L, prefs.lastAutoSnoozeEpochMs)
+
+        repository.setAutoSnoozeEnabled(false)
+        assertFalse(repository.filterPreferences.first().isAutoSnoozeEnabled)
+        assertFalse(repository.isAutoSnoozeEnabled.first())
+
+        repository.setAutoSnoozeEnabled(true)
+        assertTrue(repository.filterPreferences.first().isAutoSnoozeEnabled)
+        assertTrue(repository.isAutoSnoozeEnabled.first())
+    }
+
+    @Test
+    fun testRecordAutoSnoozeTimestampAndReset() = runTest(testDispatcher) {
+        val snoozeTime = 555_000L
+        repository.recordAutoSnoozeTimestamp(snoozeTime)
+        assertEquals(snoozeTime, repository.filterPreferences.first().lastAutoSnoozeEpochMs)
+        assertEquals(snoozeTime, repository.lastAutoSnoozeEpochMs.first())
+
+        repository.resetAutoSnoozeCooldown()
+        assertEquals(0L, repository.filterPreferences.first().lastAutoSnoozeEpochMs)
+    }
 }

@@ -104,6 +104,40 @@ fun DashboardScreen(
                 )
             }
 
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Auto-Snooze Suggested Posts Toggle
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "Auto-Snooze Suggested Posts",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White
+                    )
+                    Text(
+                        text = if (state.isAutoSnoozeEnabled) "Every 30 days in feed" else "Disabled",
+                        fontSize = 13.sp,
+                        color = if (state.isAutoSnoozeEnabled) Color.Green else Color.Gray
+                    )
+                }
+
+                Switch(
+                    checked = state.isAutoSnoozeEnabled,
+                    onCheckedChange = { viewModel.setAutoSnoozeEnabled(it) },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.Black,
+                        checkedTrackColor = Color.White,
+                        uncheckedThumbColor = Color.White,
+                        uncheckedTrackColor = Color.DarkGray
+                    )
+                )
+            }
+
             Spacer(modifier = Modifier.height(32.dp))
 
             // Pause section

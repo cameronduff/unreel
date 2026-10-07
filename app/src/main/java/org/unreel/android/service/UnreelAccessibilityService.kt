@@ -19,11 +19,13 @@ import org.unreel.android.engine.DebouncedBackDispatcher
 import org.unreel.android.engine.InstagramBottomNavDetector
 import org.unreel.android.engine.InstagramClipsDetector
 import org.unreel.android.engine.InstagramModalDetector
+import org.unreel.android.engine.InstagramSuggestedPostSnoozer
 import org.unreel.android.overlay.TouchAbsorberOverlayService
 
 class UnreelAccessibilityService : AccessibilityService() {
 
     internal var backDispatcher = DebouncedBackDispatcher(this)
+    internal var suggestedPostSnoozer = InstagramSuggestedPostSnoozer()
     internal var onReelsIntercepted: (() -> Unit)? = null
     internal var rootNodeProvider: (() -> AccessibilityNodeInfo?)? = null
     internal var serviceScope: CoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -62,7 +64,8 @@ class UnreelAccessibilityService : AccessibilityService() {
         serviceScope.launch {
             repo.filterPreferences.collect { prefs ->
                 cachedPreferences = prefs
-                Log.d(TAG, "Preferences updated: filterEnabled=${prefs.isReelsFilterEnabled}, pauseUntil=${prefs.pauseUntilEpochMs}")
+                suggestedPostSnoozer.lastSuccessfulSnoozeEpochMs = prefs.lastAutoSnoozeEpochMs
+                Log.d(TAG, "Preferences updated: filterEnabled=${prefs.isReelsFilterEnabled}, autoSnooze=${prefs.isAutoSnoozeEnabled}, pauseUntil=${prefs.pauseUntilEpochMs}")
             }
         }
     }
@@ -132,6 +135,37 @@ class UnreelAccessibilityService : AccessibilityService() {
                 Log.i(TAG, "Successfully dispatched Back Action to eliminate Reels")
                 onReelsIntercepted?.invoke()
                 recordIntercept(trigger)
+            }
+            return
+        }
+
+        // 5. Auto-snooze suggested posts in feed (every 30 days)
+        if (cachedPreferences.isAutoSnoozeEnabled) {
+            val snoozeResult = suggestedPostSnoozer.processHierarchy(rootCompat)
+            when (snoozeResult) {
+                is InstagramSuggestedPostSnoozer.ActionResult.SnoozeCompleted -> {
+                    Log.i(TAG, "Auto-snooze completed successfully (${snoozeResult.trigger})")
+                    recordIntercept(snoozeResult.trigger)
+                    val repo = repositoryProvider?.invoke() ?: FilterPreferencesRepository.getInstance(this)
+                    serviceScope.launch {
+                        repo.recordAutoSnoozeTimestamp()
+                    }
+                    if (snoozeResult.trigger == ReelsInterceptEntity.TRIGGER_SETTINGS_AUTO_SNOOZE) {
+                        backDispatcher.dispatchBack()
+                    }
+                }
+                is InstagramSuggestedPostSnoozer.ActionResult.ClickedMoreOptions -> {
+                    Log.d(TAG, "Auto-snooze: clicked post options button at ${snoozeResult.bounds}")
+                }
+                is InstagramSuggestedPostSnoozer.ActionResult.ClickedNotInterested -> {
+                    Log.d(TAG, "Auto-snooze: clicked Not interested option (${snoozeResult.text})")
+                }
+                is InstagramSuggestedPostSnoozer.ActionResult.TimeoutReset -> {
+                    Log.w(TAG, "Auto-snooze: sequence timed out, backed off")
+                }
+                is InstagramSuggestedPostSnoozer.ActionResult.None -> {
+                    // Idle or cooldown active
+                }
             }
         }
     }

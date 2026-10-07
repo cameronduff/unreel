@@ -29,15 +29,37 @@ class FilterPreferencesRepository(
         .map { preferences ->
             FilterPreferences(
                 isReelsFilterEnabled = preferences[KEY_REELS_FILTER_ENABLED] ?: true,
-                pauseUntilEpochMs = preferences[KEY_PAUSE_UNTIL_EPOCH_MS] ?: 0L
+                pauseUntilEpochMs = preferences[KEY_PAUSE_UNTIL_EPOCH_MS] ?: 0L,
+                isAutoSnoozeEnabled = preferences[KEY_AUTO_SNOOZE_ENABLED] ?: true,
+                lastAutoSnoozeEpochMs = preferences[KEY_LAST_AUTO_SNOOZE_EPOCH_MS] ?: 0L
             )
         }
 
     val isReelsFilterEnabled: Flow<Boolean> = filterPreferences.map { it.isReelsFilterEnabled }
+    val isAutoSnoozeEnabled: Flow<Boolean> = filterPreferences.map { it.isAutoSnoozeEnabled }
+    val lastAutoSnoozeEpochMs: Flow<Long> = filterPreferences.map { it.lastAutoSnoozeEpochMs }
 
     suspend fun setFilterEnabled(enabled: Boolean) {
         dataStore.edit { preferences ->
             preferences[KEY_REELS_FILTER_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setAutoSnoozeEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[KEY_AUTO_SNOOZE_ENABLED] = enabled
+        }
+    }
+
+    suspend fun recordAutoSnoozeTimestamp(epochMs: Long = System.currentTimeMillis()) {
+        dataStore.edit { preferences ->
+            preferences[KEY_LAST_AUTO_SNOOZE_EPOCH_MS] = epochMs
+        }
+    }
+
+    suspend fun resetAutoSnoozeCooldown() {
+        dataStore.edit { preferences ->
+            preferences[KEY_LAST_AUTO_SNOOZE_EPOCH_MS] = 0L
         }
     }
 
@@ -57,6 +79,8 @@ class FilterPreferencesRepository(
     companion object {
         val KEY_REELS_FILTER_ENABLED = booleanPreferencesKey("key_reels_filter_enabled")
         val KEY_PAUSE_UNTIL_EPOCH_MS = longPreferencesKey("key_pause_until_epoch_ms")
+        val KEY_AUTO_SNOOZE_ENABLED = booleanPreferencesKey("key_auto_snooze_enabled")
+        val KEY_LAST_AUTO_SNOOZE_EPOCH_MS = longPreferencesKey("key_last_auto_snooze_epoch_ms")
 
         @Volatile
         private var instance: FilterPreferencesRepository? = null

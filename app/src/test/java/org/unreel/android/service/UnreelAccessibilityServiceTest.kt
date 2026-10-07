@@ -255,4 +255,74 @@ class UnreelAccessibilityServiceTest {
         service.onAccessibilityEvent(event)
         assertEquals(false, lastOverlayShow)
     }
+
+    @Test
+    fun testAutoSnoozeSuggestedPostSequence() {
+        var recordedTrigger: String? = null
+        val fakeDao = object : org.unreel.android.data.ReelsInterceptDao {
+            override suspend fun insertIntercept(entity: org.unreel.android.data.ReelsInterceptEntity): Long {
+                recordedTrigger = entity.triggerType
+                return 1L
+            }
+            override fun getCountSince(startEpochMs: Long): kotlinx.coroutines.flow.Flow<Int> = kotlinx.coroutines.flow.emptyFlow()
+            override fun getTotalCount(): kotlinx.coroutines.flow.Flow<Int> = kotlinx.coroutines.flow.emptyFlow()
+            override fun getAllIntercepts(): kotlinx.coroutines.flow.Flow<List<org.unreel.android.data.ReelsInterceptEntity>> = kotlinx.coroutines.flow.emptyFlow()
+        }
+        service.daoProvider = { fakeDao }
+
+        // Step 1: Feed with suggested post
+        val feedRoot = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/main_feed")
+            .addChild(
+                MockAccessibilityNodeBuilder()
+                    .setViewId("com.instagram.android:id/feed_tab")
+                    .setSelected(true)
+            )
+            .addChild(
+                MockAccessibilityNodeBuilder()
+                    .setText("Suggested for you")
+                    .setBounds(android.graphics.Rect(40, 200, 300, 250))
+            )
+            .addChild(
+                MockAccessibilityNodeBuilder()
+                    .setViewId("com.instagram.android:id/media_option_button")
+                    .setClickable(true)
+                    .setBounds(android.graphics.Rect(950, 190, 1050, 260))
+            )
+            .build()
+
+        service.rootNodeProvider = { feedRoot.unwrap() as AccessibilityNodeInfo }
+
+        val feedEvent = AccessibilityEvent.obtain().apply {
+            packageName = UnreelAccessibilityService.TARGET_INSTAGRAM_PACKAGE
+            eventType = AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+        }
+        service.onAccessibilityEvent(feedEvent)
+
+        assertEquals(org.unreel.android.engine.InstagramSuggestedPostSnoozer.State.AWAITING_MENU, service.suggestedPostSnoozer.state)
+
+        // Step 2: Menu with direct snooze
+        val menuRoot = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/bottom_sheet")
+            .addChild(
+                MockAccessibilityNodeBuilder()
+                    .setText("Snooze all suggested posts in feed for 30 days")
+                    .setClickable(true)
+                    .setBounds(android.graphics.Rect(50, 1500, 1000, 1600))
+            )
+            .build()
+
+        service.rootNodeProvider = { menuRoot.unwrap() as AccessibilityNodeInfo }
+
+        val menuEvent = AccessibilityEvent.obtain().apply {
+            packageName = UnreelAccessibilityService.TARGET_INSTAGRAM_PACKAGE
+            eventType = AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+        }
+        service.onAccessibilityEvent(menuEvent)
+
+        assertEquals(org.unreel.android.engine.InstagramSuggestedPostSnoozer.State.IDLE, service.suggestedPostSnoozer.state)
+        // Telemetry recorded via DAO
+        org.robolectric.shadows.ShadowLooper.idleMainLooper()
+        assertEquals(org.unreel.android.data.ReelsInterceptEntity.TRIGGER_FEED_AUTO_SNOOZE, recordedTrigger)
+    }
 }

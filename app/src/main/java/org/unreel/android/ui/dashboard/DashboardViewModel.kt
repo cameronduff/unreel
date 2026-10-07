@@ -19,7 +19,9 @@ data class DashboardUiState(
     val estimatedMinutesSaved: Int = 0,
     val isReelsFilterEnabled: Boolean = true,
     val pauseUntilEpochMs: Long = 0L,
-    val remainingPauseSeconds: Long = 0L
+    val remainingPauseSeconds: Long = 0L,
+    val isAutoSnoozeEnabled: Boolean = true,
+    val lastAutoSnoozeEpochMs: Long = 0L
 ) {
     val isPaused: Boolean get() = remainingPauseSeconds > 0L
 }
@@ -54,7 +56,9 @@ class DashboardViewModel(
             estimatedMinutesSaved = (count * 45) / 60,
             isReelsFilterEnabled = prefs.isReelsFilterEnabled,
             pauseUntilEpochMs = prefs.pauseUntilEpochMs,
-            remainingPauseSeconds = remainingSec
+            remainingPauseSeconds = remainingSec,
+            isAutoSnoozeEnabled = prefs.isAutoSnoozeEnabled,
+            lastAutoSnoozeEpochMs = prefs.lastAutoSnoozeEpochMs
         )
     }.stateIn(
         scope = viewModelScope,
@@ -64,6 +68,14 @@ class DashboardViewModel(
 
     fun setReelsFilterEnabled(enabled: Boolean): Job = viewModelScope.launch {
         filterPreferencesRepository.setFilterEnabled(enabled)
+    }
+
+    fun setAutoSnoozeEnabled(enabled: Boolean): Job = viewModelScope.launch {
+        filterPreferencesRepository.setAutoSnoozeEnabled(enabled)
+    }
+
+    fun resetAutoSnoozeCooldown(): Job = viewModelScope.launch {
+        filterPreferencesRepository.resetAutoSnoozeCooldown()
     }
 
     private fun startCountdown(totalSeconds: Long) {

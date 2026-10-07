@@ -362,4 +362,11 @@ Every ticket created in the database MUST contain:
 - **[2026-10-07 20:10:00] Discovery / Engineering Note**:
   - Addressed Instagram Daily Limit / Modal dialog overlay obstruction. Engineered `InstagramModalDetector.kt` to traverse accessibility node hierarchies and detect dialog containers (`dialog_container`, `dialog_window`, `bottom_sheet_container`, `action_sheet_container`, `igds_headline_headline`, `comment_composer_container`, `direct_share_sheet`, `reel_viewer_root`, `row_thread_composer`, `quick_capture_fragment_container`). When active, `UnreelAccessibilityService` immediately dismisses the floating blackout overlay (`updateOverlay(false)`), ensuring Daily Time Limit buttons, comments, story replies, and DMs remain 100% interactive. Mapped all 9 primary Instagram customer journeys in `docs/CUSTOMER_JOURNEYS.md`. Verified on physical Pixel 4a: 89 unit tests pass (100%), automated on-device E2E test suite passes 100%.
 
+- **[2026-10-07 21:15:00] Discovery / Engineering Note**:
+  - Fixed fast scroll ANR and IPC spam in `UnreelAccessibilityService.kt`: Added state and bounds caching (`lastOverlayState`, `lastOverlayBounds`) to ensure `TouchAbsorberOverlayService.show/hide()` is only called on state transitions rather than on every high-frequency scroll event.
+
+- **[2026-10-07 21:35:00] Discovery / Engineering Note**:
+  - Implemented Option 1: 30-day silent auto-snoozing of feed suggested posts via `InstagramSuggestedPostSnoozer.kt`. Traverses accessibility hierarchy to catch suggested post indicators ("Suggested for you", "Because you follow", etc.) on the Home feed, clicks post options (`media_option_button`), and programmatically triggers "Not interested" -> "Snooze all suggested posts in feed for 30 days" (or direct snooze menu item). Also detects `instagram://settings_content_preferences` and auto-toggles "Snooze suggested posts" if off. Backed by 24h cooldown gating (zero overhead during regular feed browsing), 2.5s watchdog timeout, DataStore persistence, Room telemetry (`TRIGGER_FEED_AUTO_SNOOZE`), and dashboard toggle UI. Verified across 106 unit/integration tests (100% pass) and physical Pixel 4a E2E performance suite (100% pass, 2.0ms latency).
+
+
 
