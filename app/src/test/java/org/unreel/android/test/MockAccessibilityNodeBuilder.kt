@@ -8,6 +8,7 @@ class MockAccessibilityNodeBuilder {
     private var viewIdResourceName: String? = null
     private var text: CharSequence? = null
     private var contentDescription: CharSequence? = null
+    private var className: CharSequence? = null
     private var isSelected: Boolean = false
     private var isVisibleToUser: Boolean = true
     private val children = mutableListOf<MockAccessibilityNodeBuilder>()
@@ -15,6 +16,7 @@ class MockAccessibilityNodeBuilder {
     fun setViewId(id: String?) = apply { this.viewIdResourceName = id }
     fun setText(text: CharSequence?) = apply { this.text = text }
     fun setContentDescription(desc: CharSequence?) = apply { this.contentDescription = desc }
+    fun setClassName(className: CharSequence?) = apply { this.className = className }
     fun setSelected(selected: Boolean) = apply { this.isSelected = selected }
     fun setVisibleToUser(visible: Boolean) = apply { this.isVisibleToUser = visible }
 
@@ -27,6 +29,7 @@ class MockAccessibilityNodeBuilder {
         node.viewIdResourceName = viewIdResourceName
         node.text = text
         node.contentDescription = contentDescription
+        node.className = className
         node.isSelected = isSelected
         node.isVisibleToUser = isVisibleToUser
 

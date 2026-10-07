@@ -127,4 +127,27 @@ class UnreelAccessibilityServiceTest {
         service.onAccessibilityEvent(event)
         assertEquals(0, backActionCount)
     }
+
+    @Test
+    fun testWhenFilteringDisabledDoesNotTriggerBack() {
+        service.isFilterActiveProvider = { false }
+
+        val clipsRoot = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/main_layout")
+            .addChild(
+                MockAccessibilityNodeBuilder()
+                    .setViewId("com.instagram.android:id/clips_video_container")
+            )
+            .build()
+
+        service.rootNodeProvider = { clipsRoot.unwrap() as AccessibilityNodeInfo }
+
+        val event = AccessibilityEvent.obtain().apply {
+            packageName = UnreelAccessibilityService.TARGET_INSTAGRAM_PACKAGE
+            eventType = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+        }
+
+        service.onAccessibilityEvent(event)
+        assertEquals(0, backActionCount)
+    }
 }
