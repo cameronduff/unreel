@@ -100,4 +100,34 @@ class TouchAbsorberOverlayServiceTest {
         assertFalse(service.isOverlayAttached)
         assertNull(service.overlayView)
     }
+
+    @Test
+    fun testAttachOverlayWithCustomBounds() {
+        service.canDrawOverlaysCheck = { true }
+        val custom = Rect(216, 2142, 432, 2274)
+        val success = service.attachOverlay(custom)
+
+        assertTrue(success)
+        assertTrue(service.isOverlayAttached)
+        assertEquals(custom, service.currentBounds)
+
+        val params = service.overlayView!!.layoutParams as WindowManager.LayoutParams
+        assertEquals(custom.width(), params.width)
+        assertEquals(custom.height(), params.height)
+        assertEquals(custom.left, params.x)
+        assertEquals(custom.top, params.y)
+    }
+
+    @Test
+    fun testUpdateOverlayWhenBoundsChange() {
+        service.canDrawOverlaysCheck = { true }
+        val initial = Rect(216, 2142, 432, 2274)
+        service.attachOverlay(initial)
+        assertEquals(initial, service.currentBounds)
+
+        val updated = Rect(216, 2100, 432, 2300)
+        val success = service.attachOverlay(updated)
+        assertTrue(success)
+        assertEquals(updated, service.currentBounds)
+    }
 }

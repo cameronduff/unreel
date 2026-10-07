@@ -36,6 +36,22 @@ class OverlayPositionCalculatorTest {
     }
 
     @Test
+    fun testDefaultReelsTabIndexIsOne() {
+        val width = 1080
+        val height = 2340
+        val navBarHeight = 198
+        val bounds = OverlayPositionCalculator.calculateTabBounds(
+            screenWidthPx = width,
+            screenHeightPx = height,
+            navBarHeightPx = navBarHeight
+        )
+
+        // default totalTabs=5, tabIndex=1
+        val expected = Rect(216, 2340 - 198, 432, 2340)
+        assertEquals(expected, bounds)
+    }
+
+    @Test
     fun testQHDPlusCoordinates() {
         val width = 1440
         val height = 3120

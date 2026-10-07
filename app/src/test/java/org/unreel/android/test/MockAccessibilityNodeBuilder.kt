@@ -11,6 +11,7 @@ class MockAccessibilityNodeBuilder {
     private var className: CharSequence? = null
     private var isSelected: Boolean = false
     private var isVisibleToUser: Boolean = true
+    private var boundsInScreen: android.graphics.Rect? = null
     private val children = mutableListOf<MockAccessibilityNodeBuilder>()
 
     fun setViewId(id: String?) = apply { this.viewIdResourceName = id }
@@ -19,6 +20,7 @@ class MockAccessibilityNodeBuilder {
     fun setClassName(className: CharSequence?) = apply { this.className = className }
     fun setSelected(selected: Boolean) = apply { this.isSelected = selected }
     fun setVisibleToUser(visible: Boolean) = apply { this.isVisibleToUser = visible }
+    fun setBounds(bounds: android.graphics.Rect) = apply { this.boundsInScreen = bounds }
 
     fun addChild(child: MockAccessibilityNodeBuilder) = apply {
         children.add(child)
@@ -32,6 +34,7 @@ class MockAccessibilityNodeBuilder {
         node.className = className
         node.isSelected = isSelected
         node.isVisibleToUser = isVisibleToUser
+        boundsInScreen?.let { node.setBoundsInScreen(it) }
 
         val shadow = Shadows.shadowOf(node)
         for (childBuilder in children) {

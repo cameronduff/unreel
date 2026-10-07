@@ -22,6 +22,7 @@ class TouchAbsorberOverlayService : Service() {
     internal var onTouchAbsorbed: (() -> Unit)? = null
 
     internal var overlayView: View? = null
+    internal var currentBounds: Rect? = null
     internal var isOverlayAttached: Boolean = false
         private set
 
@@ -32,12 +33,9 @@ class TouchAbsorberOverlayService : Service() {
         return canDrawOverlaysCheck?.invoke() ?: Settings.canDrawOverlays(this)
     }
 
-    fun attachOverlay(): Boolean {
+    fun attachOverlay(targetRect: Rect? = null): Boolean {
         if (!canDrawOverlays()) {
             return false
-        }
-        if (isOverlayAttached) {
-            return true
         }
 
         val displayMetrics = resources.displayMetrics
@@ -45,12 +43,31 @@ class TouchAbsorberOverlayService : Service() {
         val screenHeight = displayMetrics.heightPixels.coerceAtLeast(1)
         val navBarHeight = (56 * displayMetrics.density).toInt().coerceAtLeast(1)
 
-        val rect = boundsCalculator?.invoke(screenWidth, screenHeight)
+        val rect = targetRect
+            ?: boundsCalculator?.invoke(screenWidth, screenHeight)
             ?: OverlayPositionCalculator.calculateTabBounds(
                 screenWidthPx = screenWidth,
                 screenHeightPx = screenHeight,
                 navBarHeightPx = navBarHeight
             )
+
+        if (isOverlayAttached && overlayView != null) {
+            if (currentBounds == rect) {
+                return true
+            }
+            currentBounds = rect
+            try {
+                val params = overlayView!!.layoutParams as WindowManager.LayoutParams
+                params.x = rect.left
+                params.y = rect.top
+                params.width = rect.width()
+                params.height = rect.height()
+                windowManager.updateViewLayout(overlayView, params)
+                return true
+            } catch (_: Exception) {
+                return false
+            }
+        }
 
         val layoutType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -74,7 +91,7 @@ class TouchAbsorberOverlayService : Service() {
         }
 
         val view = View(this).apply {
-            setBackgroundColor(Color.TRANSPARENT)
+            setBackgroundColor(Color.BLACK)
             setOnTouchListener { _, event ->
                 if (event.action == MotionEvent.ACTION_DOWN) {
                     onTouchAbsorbed?.invoke()
@@ -88,6 +105,7 @@ class TouchAbsorberOverlayService : Service() {
         try {
             windowManager.addView(view, params)
             overlayView = view
+            currentBounds = rect
             isOverlayAttached = true
             return true
         } catch (_: Exception) {
@@ -103,13 +121,25 @@ class TouchAbsorberOverlayService : Service() {
                 // View might already be detached
             } finally {
                 overlayView = null
+                currentBounds = null
                 isOverlayAttached = false
             }
         }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        attachOverlay()
+        val action = intent?.action
+        if (action == ACTION_DETACH) {
+            detachOverlay()
+        } else {
+            val bounds = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                intent?.getParcelableExtra(EXTRA_BOUNDS, Rect::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                intent?.getParcelableExtra(EXTRA_BOUNDS)
+            }
+            attachOverlay(bounds)
+        }
         return START_STICKY
     }
 
@@ -119,4 +149,31 @@ class TouchAbsorberOverlayService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    companion object {
+        const val ACTION_ATTACH = "org.unreel.android.overlay.ATTACH"
+        const val ACTION_DETACH = "org.unreel.android.overlay.DETACH"
+        const val EXTRA_BOUNDS = "extra_bounds"
+
+        fun show(context: Context, bounds: Rect? = null) {
+            try {
+                val intent = Intent(context, TouchAbsorberOverlayService::class.java).apply {
+                    action = ACTION_ATTACH
+                    bounds?.let { putExtra(EXTRA_BOUNDS, it) }
+                }
+                context.startService(intent)
+            } catch (_: Exception) {
+            }
+        }
+
+        fun hide(context: Context) {
+            try {
+                val intent = Intent(context, TouchAbsorberOverlayService::class.java).apply {
+                    action = ACTION_DETACH
+                }
+                context.startService(intent)
+            } catch (_: Exception) {
+            }
+        }
+    }
 }

@@ -5,7 +5,7 @@ import android.graphics.Rect
 object OverlayPositionCalculator {
 
     const val DEFAULT_TOTAL_TABS = 5
-    const val DEFAULT_REELS_TAB_INDEX = 3
+    const val DEFAULT_REELS_TAB_INDEX = 1
 
     /**
      * Calculates the screen bounds (Rect) for the Reels tab overlay touch absorber.

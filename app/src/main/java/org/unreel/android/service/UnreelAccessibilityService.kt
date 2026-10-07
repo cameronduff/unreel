@@ -18,6 +18,7 @@ import org.unreel.android.data.UnreelDatabase
 import org.unreel.android.engine.DebouncedBackDispatcher
 import org.unreel.android.engine.InstagramBottomNavDetector
 import org.unreel.android.engine.InstagramClipsDetector
+import org.unreel.android.overlay.TouchAbsorberOverlayService
 
 class UnreelAccessibilityService : AccessibilityService() {
 
@@ -28,8 +29,21 @@ class UnreelAccessibilityService : AccessibilityService() {
     internal var daoProvider: (() -> ReelsInterceptDao)? = null
     internal var repositoryProvider: (() -> FilterPreferencesRepository)? = null
     internal var isFilterActiveProvider: (() -> Boolean)? = null
+    internal var overlayController: ((show: Boolean, bounds: android.graphics.Rect?) -> Unit)? = null
 
     private var cachedPreferences: FilterPreferences = FilterPreferences()
+
+    private fun updateOverlay(show: Boolean, bounds: android.graphics.Rect? = null) {
+        if (overlayController != null) {
+            overlayController?.invoke(show, bounds)
+            return
+        }
+        if (show) {
+            TouchAbsorberOverlayService.show(this, bounds)
+        } else {
+            TouchAbsorberOverlayService.hide(this)
+        }
+    }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -55,15 +69,28 @@ class UnreelAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
         val pkg = event.packageName?.toString()
-        if (pkg != TARGET_INSTAGRAM_PACKAGE) return
+        if (pkg != TARGET_INSTAGRAM_PACKAGE) {
+            if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+                updateOverlay(false)
+            }
+            return
+        }
 
         if (!isFilteringActive()) {
+            updateOverlay(false)
             return
         }
 
         val root = resolveRootInActiveWindow() ?: return
         val rootCompat = AccessibilityNodeInfoCompat.wrap(root)
 
+        // 1. Maintain blackout touch-absorber overlay over the Reels tab button
+        val reelsBounds = InstagramBottomNavDetector.findReelsTabBounds(rootCompat)
+        if (reelsBounds != null) {
+            updateOverlay(true, reelsBounds)
+        }
+
+        // 2. Intercept active Reels tab selection or fullscreen clips viewer
         val isClipsVisible = InstagramClipsDetector.isClipsContainerVisible(rootCompat)
         val isReelsTabSelected = InstagramBottomNavDetector.isReelsTabSelected(rootCompat)
 
@@ -107,6 +134,7 @@ class UnreelAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        updateOverlay(false)
         serviceScope.cancel()
         Log.i(TAG, "Unreel Accessibility Service destroyed")
     }

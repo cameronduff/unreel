@@ -150,4 +150,68 @@ class UnreelAccessibilityServiceTest {
         service.onAccessibilityEvent(event)
         assertEquals(0, backActionCount)
     }
+
+    @Test
+    fun testInstagramEventShowsOverlayWhenReelsTabFound() {
+        var lastOverlayShow: Boolean? = null
+        var lastBounds: android.graphics.Rect? = null
+        service.overlayController = { show, bounds ->
+            lastOverlayShow = show
+            lastBounds = bounds
+        }
+
+        val tabRoot = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/tab_bar")
+            .addChild(
+                MockAccessibilityNodeBuilder()
+                    .setViewId("com.instagram.android:id/clips_tab")
+                    .setContentDescription("Reels")
+                    .setBounds(android.graphics.Rect(216, 2142, 432, 2274))
+            )
+            .build()
+
+        service.rootNodeProvider = { tabRoot.unwrap() as AccessibilityNodeInfo }
+
+        val event = AccessibilityEvent.obtain().apply {
+            packageName = UnreelAccessibilityService.TARGET_INSTAGRAM_PACKAGE
+            eventType = AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+        }
+
+        service.onAccessibilityEvent(event)
+        assertEquals(true, lastOverlayShow)
+        assertEquals(android.graphics.Rect(216, 2142, 432, 2274), lastBounds)
+    }
+
+    @Test
+    fun testNonInstagramWindowStateEventHidesOverlay() {
+        var lastOverlayShow: Boolean? = null
+        service.overlayController = { show, _ ->
+            lastOverlayShow = show
+        }
+
+        val event = AccessibilityEvent.obtain().apply {
+            packageName = "com.google.android.apps.nexuslauncher"
+            eventType = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+        }
+
+        service.onAccessibilityEvent(event)
+        assertEquals(false, lastOverlayShow)
+    }
+
+    @Test
+    fun testWhenFilteringDisabledHidesOverlay() {
+        var lastOverlayShow: Boolean? = null
+        service.overlayController = { show, _ ->
+            lastOverlayShow = show
+        }
+        service.isFilterActiveProvider = { false }
+
+        val event = AccessibilityEvent.obtain().apply {
+            packageName = UnreelAccessibilityService.TARGET_INSTAGRAM_PACKAGE
+            eventType = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+        }
+
+        service.onAccessibilityEvent(event)
+        assertEquals(false, lastOverlayShow)
+    }
 }
