@@ -33,18 +33,27 @@ class UnreelAccessibilityService : AccessibilityService() {
     internal var overlayController: ((show: Boolean, bounds: android.graphics.Rect?) -> Unit)? = null
 
     private var cachedPreferences: FilterPreferences = FilterPreferences()
+    private var lastOverlayState: Boolean? = null
+    private var lastOverlayBounds: android.graphics.Rect? = null
 
     private fun updateOverlay(show: Boolean, bounds: android.graphics.Rect? = null) {
         if (overlayController != null) {
             overlayController?.invoke(show, bounds)
             return
         }
+        if (lastOverlayState == show && lastOverlayBounds == bounds) {
+            return
+        }
+        lastOverlayState = show
+        lastOverlayBounds = bounds
+
         if (show) {
             TouchAbsorberOverlayService.show(this, bounds)
         } else {
             TouchAbsorberOverlayService.hide(this)
         }
     }
+
 
     override fun onServiceConnected() {
         super.onServiceConnected()
