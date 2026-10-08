@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use, fork, or build upon this software, please cite it as below."
+authors:
+  - family-names: "Duff"
+    given-names: "Cameron"
+    email: "cameronsduff@gmail.com"
+title: "Unreel: High-Performance Open-Source Distraction & Reels Eliminator for Android"
+version: 1.0.0
+date-released: 2026-10-05
+url: "https://github.com/cameronduff/unreel"
+repository-code: "https://github.com/cameronduff/unreel"
+license: "GPL-3.0-only"
+keywords:
+  - android
+  - digital-wellbeing
+  - accessibility-service
+  - distraction-free
+  - reels-blocker
+  - open-source

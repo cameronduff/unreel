@@ -108,6 +108,32 @@ Project roadmap and atomic task specifications are tracked in Notion:
 
 ---
 
-## 📄 License
+## 📄 License & Attribution
 
-GPL-3.0 License. 100% Free and Open Source.
+This project is licensed under the **GNU General Public License v3.0 (GPL-3.0)** with **Section 7(b) Additional Terms for Mandatory Author Attribution & Citation**.
+
+### Attribution Requirement
+If this codebase, architecture, or any portion thereof is reused, forked, modified, redistributed, or incorporated into another project or publication, **Cameron Duff must be prominently credited and cited as an original author and contributor** in:
+1. The project repository README and contributor list.
+2. The user-facing documentation and "About / Credits" section.
+3. All source code headers retaining original copyright notices.
+4. A direct link to the canonical source repository: [https://github.com/cameronduff/unreel](https://github.com/cameronduff/unreel)
+
+### Citation Format
+
+#### BibTeX
+```bibtex
+@software{duff2026unreel,
+  author       = {Cameron Duff},
+  title        = {Unreel: High-Performance Open-Source Distraction & Reels Eliminator for Android},
+  year         = {2026},
+  publisher    = {GitHub},
+  journal      = {GitHub repository},
+  howpublished = {\url{https://github.com/cameronduff/unreel}}
+}
+```
+
+#### Markdown / Text
+> Cameron Duff. *Unreel: High-Performance Open-Source Distraction & Reels Eliminator for Android* (2026). GitHub: [https://github.com/cameronduff/unreel](https://github.com/cameronduff/unreel).
+
+See [LICENSE](LICENSE) and [CITATION.cff](CITATION.cff) for full details.
