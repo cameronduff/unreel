@@ -1,13 +1,15 @@
-name: Unreel CI
+name: Unreel CI & Universal Release Matrix
 
 on:
   push:
     branches: [ "main" ]
+    tags: [ "v*" ]
   pull_request:
     branches: [ "main" ]
 
 jobs:
-  build-and-test:
+  test-and-audit:
+    name: Unit Tests & Security Audit
     runs-on: ubuntu-latest
 
     steps:
@@ -26,11 +28,66 @@ jobs:
       - name: Grant Execute Permission to Gradlew
         run: chmod +x gradlew
 
-      - name: Run Unit Tests
+      - name: Security Audit - Verify Zero Network Permissions
+        run: ./gradlew testDebugUnitTest --tests "org.unreel.android.security.ZeroNetworkSecurityAuditTest"
+
+      - name: Multi-Device Matrix - Compatibility Test
+        run: ./gradlew testDebugUnitTest --tests "org.unreel.android.matrix.MultiDeviceMatrixTest"
+
+      - name: Run Full Unit Test Suite
         run: ./gradlew testDebugUnitTest
 
-      - name: Run Android Lint
+      - name: Run Android Lint Vital
         run: ./gradlew lintDebug
 
-      - name: Build Release APK
-        run: ./gradlew assembleRelease
+  package-and-distribute:
+    name: Build & Universal Release Distribution
+    needs: [test-and-audit]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Grant Execute Permission to Gradlew
+        run: chmod +x gradlew
+
+      - name: Build R8-Optimized Universal Release APK
+        run: |
+          ./gradlew assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk Unreel-universal.apk
+          ls -lh Unreel-universal.apk
+
+      - name: Verify APK Size Constraint (< 1.5 MB)
+        run: |
+          APK_SIZE=$(stat -c%s Unreel-universal.apk)
+          echo "Universal APK size: $APK_SIZE bytes"
+          if [ "$APK_SIZE" -gt 1572864 ]; then
+            echo "Error: Universal APK exceeds 1.5MB limit!"
+            exit 1
+          fi
+
+      - name: Upload Universal APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Unreel-universal-apk
+          path: Unreel-universal.apk
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Unreel-universal.apk
+          draft: false
+          prerelease: false
+          generate_release_notes: true
