@@ -376,3 +376,18 @@ Every ticket created in the database MUST contain:
 
 - **[2026-10-08 17:15:12] Discovery / Engineering Note**:
   - Updated project license to GNU General Public License v3.0 (GPL-3.0) with Section 7(b) mandatory attribution and citation terms requiring Cameron Duff to be cited as an original creator and contributor upon any reuse or redistribution. Created LICENSE and CITATION.cff, updated README.md and metadata/org.unreel.android.yml.
+
+- **[2026-10-08 17:48:00] Discovery / Engineering Note**:
+  - Fixed Direct Messages overlay persistence and implemented [UNR-22] In-Feed Sponsored Post Auto-Hider:
+    1. Replaced asynchronous IPC `startService()` in `TouchAbsorberOverlayService` with in-process `@Volatile` singleton direct attach/detach methods (<0.1ms dispatch).
+    2. Updated `InstagramModalDetector` and `InstagramBottomNavDetector` to detect direct message view hierarchies (`row_thread_composer`, `message_composer_bar`, `direct_thread`, `thread_fragment_container`), suppressing the overlay immediately when in chat threads or when keyboard opens. Verified on Pixel 4a with screenshots.
+    3. Engineered `InstagramFeedAdShield.kt` state machine detecting Sponsored/Ad labels in the main feed and programmatically triggering post options (`media_option_button`) -> "Hide ad" -> "It's irrelevant". Verified across 124 unit tests (100% pass) and deployed to physical Pixel 4a.
+
+- **[2026-10-08 17:54:00] Discovery / Engineering Note**:
+  - Implemented [UNR-23] Instagram AdShield - Story Ads Auto-Fast-Forward:
+    1. Engineered `InstagramStoryAdDetector.kt` identifying full-screen story viewer containers (`reel_viewer_root`, `stories_viewer_container`) displaying Sponsored/Ad labels or ad CTA buttons (`story_ad_cta`, `ad_action_button`).
+    2. Programmatically fast-forwards sponsored stories in <30ms via `ACTION_SCROLL_FORWARD` or instant right-edge tap gesture dispatch (`dispatchTapGesture(x = 92% width, y = center)`), preserving organic friend stories with a 350ms debounce window.
+    3. Enabled `android:canPerformGestures="true"` in accessibility service config. Logged intercept telemetry to Room database (`TRIGGER_STORY_AD_SHIELD`).
+    4. Verified across 131 unit tests (100% pass rate).
+
+

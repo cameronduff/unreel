@@ -56,8 +56,8 @@ By reading the accessibility node hierarchy locally on-device:
 | **[UNR-19]** | Fast Scroll IPC Debounce & Overlay Lifecycle ANR Fix | `Done` | P0 - Blocker | Overlay |
 | **[UNR-20]** | 30-Day Suggested Post In-Feed Auto-Snoozer | `Done` | P1 - High | Accessibility |
 | **[UNR-21]** | Startup Splash Screen Overlay Suppression | `Done` | P2 - Medium | Overlay |
-| **[UNR-22]** | Epic: Instagram AdShield - In-Feed Sponsored Post Auto-Hider | `Ready for SWE` | P1 - High | Accessibility |
-| **[UNR-23]** | Epic: Instagram AdShield - Story Ads Auto-Fast-Forward | `Ready for SWE` | P1 - High | Accessibility |
+| **[UNR-22]** | Epic: Instagram AdShield - In-Feed Sponsored Post Auto-Hider | `Done` | P1 - High | Accessibility |
+| **[UNR-23]** | Epic: Instagram AdShield - Story Ads Auto-Fast-Forward | `Done` | P1 - High | Accessibility |
 | **[UNR-24]** | Multi-Device Compatibility Test Matrix (Robolectric Multi-SDK & Screen Ratio Harness) | `Ready for SWE` | P2 - Medium | Core / Engine |
 | **[UNR-25]** | Automated GitHub Actions CI Matrix & Universal Release Distribution | `Ready for SWE` | P2 - Medium | Packaging |
 | **[UNR-26]** | Cloud Device Farm Testing with Firebase Test Lab | `Ready for SWE` | P3 - Low | Core / Engine |

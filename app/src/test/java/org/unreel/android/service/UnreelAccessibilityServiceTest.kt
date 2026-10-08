@@ -451,4 +451,66 @@ class UnreelAccessibilityServiceTest {
         Thread.sleep(100)
         assertEquals(org.unreel.android.data.ReelsInterceptEntity.TRIGGER_FEED_AD_SHIELD, recordedTrigger)
     }
+
+    @Test
+    fun testStoryAdShieldAutoSkipsSponsoredStory() {
+        var recordedTrigger: String? = null
+        var dispatchedTapX: Float? = null
+        var dispatchedTapY: Float? = null
+
+        val fakeDao = object : org.unreel.android.data.ReelsInterceptDao {
+            override suspend fun insertIntercept(entity: org.unreel.android.data.ReelsInterceptEntity): Long {
+                recordedTrigger = entity.triggerType
+                return 1L
+            }
+            override fun getCountSince(startEpochMs: Long): kotlinx.coroutines.flow.Flow<Int> = kotlinx.coroutines.flow.emptyFlow()
+            override fun getTotalCount(): kotlinx.coroutines.flow.Flow<Int> = kotlinx.coroutines.flow.emptyFlow()
+            override fun getAllIntercepts(): kotlinx.coroutines.flow.Flow<List<org.unreel.android.data.ReelsInterceptEntity>> = kotlinx.coroutines.flow.emptyFlow()
+        }
+        service.daoProvider = { fakeDao }
+        service.gestureDispatcher = { x, y ->
+            dispatchedTapX = x
+            dispatchedTapY = y
+            true
+        }
+
+        val storyAdRoot = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/reel_viewer_root")
+            .setBounds(android.graphics.Rect(0, 0, 1080, 2340))
+            .addChild(
+                MockAccessibilityNodeBuilder()
+                    .setViewId("com.instagram.android:id/action_bar_title_view")
+                    .setText("Sponsored Brand")
+                    .setVisibleToUser(true)
+            )
+            .addChild(
+                MockAccessibilityNodeBuilder()
+                    .setViewId("com.instagram.android:id/sponsored_label")
+                    .setText("Sponsored")
+                    .setVisibleToUser(true)
+            )
+            .addChild(
+                MockAccessibilityNodeBuilder()
+                    .setViewId("com.instagram.android:id/story_ad_cta")
+                    .setText("Install Now")
+                    .setVisibleToUser(true)
+            )
+            .build()
+
+        service.rootNodeProvider = { storyAdRoot.unwrap() as AccessibilityNodeInfo }
+
+        val event = AccessibilityEvent.obtain().apply {
+            packageName = UnreelAccessibilityService.TARGET_INSTAGRAM_PACKAGE
+            eventType = AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+        }
+        service.onAccessibilityEvent(event)
+
+        assertTrue("Tap X must be >= 90% of screen width", (dispatchedTapX ?: 0f) >= 970f)
+        assertEquals(1170f, dispatchedTapY ?: 0f, 0.1f)
+
+        org.robolectric.shadows.ShadowLooper.idleMainLooper()
+        Thread.sleep(100)
+        assertEquals(org.unreel.android.data.ReelsInterceptEntity.TRIGGER_STORY_AD_SHIELD, recordedTrigger)
+    }
 }
+

@@ -20,6 +20,7 @@ import org.unreel.android.engine.InstagramBottomNavDetector
 import org.unreel.android.engine.InstagramClipsDetector
 import org.unreel.android.engine.InstagramFeedAdShield
 import org.unreel.android.engine.InstagramModalDetector
+import org.unreel.android.engine.InstagramStoryAdDetector
 import org.unreel.android.engine.InstagramSuggestedPostSnoozer
 import org.unreel.android.overlay.TouchAbsorberOverlayService
 
@@ -28,6 +29,8 @@ class UnreelAccessibilityService : AccessibilityService() {
     internal var backDispatcher = DebouncedBackDispatcher(this)
     internal var suggestedPostSnoozer = InstagramSuggestedPostSnoozer()
     internal var feedAdShield = InstagramFeedAdShield()
+    internal var storyAdDetector = InstagramStoryAdDetector()
+    internal var gestureDispatcher: ((x: Float, y: Float) -> Boolean)? = null
     internal var onReelsIntercepted: (() -> Unit)? = null
     internal var rootNodeProvider: (() -> AccessibilityNodeInfo?)? = null
     internal var serviceScope: CoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -210,6 +213,45 @@ class UnreelAccessibilityService : AccessibilityService() {
                     // Idle or cooldown
                 }
             }
+        }
+
+        // 7. Instagram AdShield: Story Ads Auto-Fast-Forward
+        if (cachedPreferences.isStoryAdShieldEnabled) {
+            val storyResult = storyAdDetector.detectAndSkipAd(rootCompat)
+            when (storyResult) {
+                is InstagramStoryAdDetector.ActionResult.SkipAd -> {
+                    Log.i(TAG, "AdShield: Skipping sponsored story (${storyResult.adIdentifier})")
+                    val scrolled = storyResult.scrollableNode?.performAction(AccessibilityNodeInfoCompat.ACTION_SCROLL_FORWARD) == true
+                    if (!scrolled) {
+                        dispatchTapGesture(storyResult.tapPoint.x.toFloat(), storyResult.tapPoint.y.toFloat())
+                    }
+                    recordIntercept(ReelsInterceptEntity.TRIGGER_STORY_AD_SHIELD)
+                }
+                is InstagramStoryAdDetector.ActionResult.InCooldown,
+                is InstagramStoryAdDetector.ActionResult.OrganicStory,
+                is InstagramStoryAdDetector.ActionResult.NotInStoryViewer -> {
+                    // Normal story viewing or debounced
+                }
+            }
+        }
+    }
+
+    internal fun dispatchTapGesture(x: Float, y: Float): Boolean {
+        val custom = gestureDispatcher
+        if (custom != null) {
+            return custom(x, y)
+        }
+        return try {
+            val path = android.graphics.Path().apply {
+                moveTo(x, y)
+            }
+            val gesture = android.accessibilityservice.GestureDescription.Builder()
+                .addStroke(android.accessibilityservice.GestureDescription.StrokeDescription(path, 0, 50))
+                .build()
+            dispatchGesture(gesture, null, null)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to dispatch tap gesture at ($x, $y)", e)
+            false
         }
     }
 
