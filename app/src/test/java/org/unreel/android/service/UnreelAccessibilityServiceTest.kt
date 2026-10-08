@@ -12,6 +12,7 @@ import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.annotation.Config
 import org.unreel.android.engine.DebouncedBackDispatcher
+import org.unreel.android.engine.InstagramFeedAdShield
 import org.unreel.android.test.MockAccessibilityNodeBuilder
 
 @RunWith(AndroidJUnit4::class)
@@ -354,5 +355,100 @@ class UnreelAccessibilityServiceTest {
         // Telemetry recorded via DAO
         org.robolectric.shadows.ShadowLooper.idleMainLooper()
         assertEquals(org.unreel.android.data.ReelsInterceptEntity.TRIGGER_FEED_AUTO_SNOOZE, recordedTrigger)
+    }
+
+    @Test
+    fun testFeedAdShieldAutoHidesSponsoredPostSequence() {
+        var recordedTrigger: String? = null
+        val fakeDao = object : org.unreel.android.data.ReelsInterceptDao {
+            override suspend fun insertIntercept(entity: org.unreel.android.data.ReelsInterceptEntity): Long {
+                recordedTrigger = entity.triggerType
+                return 1L
+            }
+            override fun getCountSince(startEpochMs: Long): kotlinx.coroutines.flow.Flow<Int> = kotlinx.coroutines.flow.emptyFlow()
+            override fun getTotalCount(): kotlinx.coroutines.flow.Flow<Int> = kotlinx.coroutines.flow.emptyFlow()
+            override fun getAllIntercepts(): kotlinx.coroutines.flow.Flow<List<org.unreel.android.data.ReelsInterceptEntity>> = kotlinx.coroutines.flow.emptyFlow()
+        }
+        service.daoProvider = { fakeDao }
+
+        // Step 1: Sponsored post detected in feed
+        val feedRoot = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/main_feed")
+            .addChild(
+                MockAccessibilityNodeBuilder()
+                    .setViewId("com.instagram.android:id/feed_tab")
+                    .setSelected(true)
+            )
+            .addChild(
+                MockAccessibilityNodeBuilder()
+                    .setText("Sponsored")
+                    .setVisibleToUser(true)
+                    .setBounds(android.graphics.Rect(40, 200, 300, 250))
+            )
+            .addChild(
+                MockAccessibilityNodeBuilder()
+                    .setViewId("com.instagram.android:id/media_option_button")
+                    .setClickable(true)
+                    .setVisibleToUser(true)
+                    .setBounds(android.graphics.Rect(950, 190, 1050, 260))
+            )
+            .build()
+
+        service.rootNodeProvider = { feedRoot.unwrap() as AccessibilityNodeInfo }
+
+        val event1 = AccessibilityEvent.obtain().apply {
+            packageName = UnreelAccessibilityService.TARGET_INSTAGRAM_PACKAGE
+            eventType = AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+        }
+        service.onAccessibilityEvent(event1)
+
+        assertEquals(InstagramFeedAdShield.State.AWAITING_OPTIONS_MENU, service.feedAdShield.state)
+
+        // Step 2: Options menu with "Hide ad"
+        val menuRoot = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/bottom_sheet")
+            .addChild(
+                MockAccessibilityNodeBuilder()
+                    .setText("Hide ad")
+                    .setClickable(true)
+                    .setVisibleToUser(true)
+                    .setBounds(android.graphics.Rect(50, 1500, 1000, 1600))
+            )
+            .build()
+
+        service.rootNodeProvider = { menuRoot.unwrap() as AccessibilityNodeInfo }
+
+        val event2 = AccessibilityEvent.obtain().apply {
+            packageName = UnreelAccessibilityService.TARGET_INSTAGRAM_PACKAGE
+            eventType = AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+        }
+        service.onAccessibilityEvent(event2)
+
+        assertEquals(InstagramFeedAdShield.State.AWAITING_REASON_MENU, service.feedAdShield.state)
+
+        // Step 3: Reason menu with "It's irrelevant"
+        val reasonRoot = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/bottom_sheet")
+            .addChild(
+                MockAccessibilityNodeBuilder()
+                    .setText("It's irrelevant")
+                    .setClickable(true)
+                    .setVisibleToUser(true)
+                    .setBounds(android.graphics.Rect(50, 1400, 1000, 1500))
+            )
+            .build()
+
+        service.rootNodeProvider = { reasonRoot.unwrap() as AccessibilityNodeInfo }
+
+        val event3 = AccessibilityEvent.obtain().apply {
+            packageName = UnreelAccessibilityService.TARGET_INSTAGRAM_PACKAGE
+            eventType = AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+        }
+        service.onAccessibilityEvent(event3)
+
+        assertEquals(InstagramFeedAdShield.State.IDLE, service.feedAdShield.state)
+        org.robolectric.shadows.ShadowLooper.idleMainLooper()
+        Thread.sleep(100)
+        assertEquals(org.unreel.android.data.ReelsInterceptEntity.TRIGGER_FEED_AD_SHIELD, recordedTrigger)
     }
 }

@@ -15,5 +15,7 @@ data class ReelsInterceptEntity(
         const val TRIGGER_BOTTOM_NAV_TAB = "reels_tab"
         const val TRIGGER_FEED_AUTO_SNOOZE = "feed_auto_snooze"
         const val TRIGGER_SETTINGS_AUTO_SNOOZE = "settings_auto_snooze"
+        const val TRIGGER_FEED_AD_SHIELD = "feed_ad_shield"
+        const val TRIGGER_STORY_AD_SHIELD = "story_ad_shield"
     }
 }

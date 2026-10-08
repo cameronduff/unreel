@@ -18,6 +18,7 @@ import org.unreel.android.data.UnreelDatabase
 import org.unreel.android.engine.DebouncedBackDispatcher
 import org.unreel.android.engine.InstagramBottomNavDetector
 import org.unreel.android.engine.InstagramClipsDetector
+import org.unreel.android.engine.InstagramFeedAdShield
 import org.unreel.android.engine.InstagramModalDetector
 import org.unreel.android.engine.InstagramSuggestedPostSnoozer
 import org.unreel.android.overlay.TouchAbsorberOverlayService
@@ -26,6 +27,7 @@ class UnreelAccessibilityService : AccessibilityService() {
 
     internal var backDispatcher = DebouncedBackDispatcher(this)
     internal var suggestedPostSnoozer = InstagramSuggestedPostSnoozer()
+    internal var feedAdShield = InstagramFeedAdShield()
     internal var onReelsIntercepted: (() -> Unit)? = null
     internal var rootNodeProvider: (() -> AccessibilityNodeInfo?)? = null
     internal var serviceScope: CoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -183,6 +185,29 @@ class UnreelAccessibilityService : AccessibilityService() {
                 }
                 is InstagramSuggestedPostSnoozer.ActionResult.None -> {
                     // Idle or cooldown active
+                }
+            }
+        }
+
+        // 6. Instagram AdShield: In-Feed Sponsored Post Auto-Hider
+        if (cachedPreferences.isFeedAdShieldEnabled) {
+            val adResult = feedAdShield.processHierarchy(rootCompat)
+            when (adResult) {
+                is InstagramFeedAdShield.ActionResult.AdHidden -> {
+                    Log.i(TAG, "AdShield: Sponsored post hidden successfully (${adResult.trigger})")
+                    recordIntercept(adResult.trigger)
+                }
+                is InstagramFeedAdShield.ActionResult.ClickedOptions -> {
+                    Log.d(TAG, "AdShield: Clicked sponsored post options button at ${adResult.bounds}")
+                }
+                is InstagramFeedAdShield.ActionResult.ClickedHideAd -> {
+                    Log.d(TAG, "AdShield: Clicked '${adResult.text}' in options menu")
+                }
+                is InstagramFeedAdShield.ActionResult.TimeoutReset -> {
+                    Log.w(TAG, "AdShield: Sequence timed out, backed off to IDLE")
+                }
+                is InstagramFeedAdShield.ActionResult.None -> {
+                    // Idle or cooldown
                 }
             }
         }

@@ -186,7 +186,6 @@ object InstagramBottomNavDetector {
      */
     fun isFeedTabActive(rootNode: AccessibilityNodeInfoCompat?): Boolean {
         if (rootNode == null) return false
-        if (isDirectThreadActive(rootNode)) return false
 
         val queue = ArrayDeque<AccessibilityNodeInfoCompat>()
         queue.add(rootNode)
@@ -197,6 +196,14 @@ object InstagramBottomNavDetector {
             visitedCount++
 
             val viewId = current.viewIdResourceName
+            if (viewId != null && (
+                viewId.contains("row_thread_composer", ignoreCase = true) ||
+                viewId.contains("message_composer", ignoreCase = true) ||
+                viewId.contains("direct_thread", ignoreCase = true)
+            )) {
+                return false
+            }
+
             val desc = current.contentDescription?.toString()
             val text = current.text?.toString()
 

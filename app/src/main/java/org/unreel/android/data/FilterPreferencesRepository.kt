@@ -31,13 +31,29 @@ class FilterPreferencesRepository(
                 isReelsFilterEnabled = preferences[KEY_REELS_FILTER_ENABLED] ?: true,
                 pauseUntilEpochMs = preferences[KEY_PAUSE_UNTIL_EPOCH_MS] ?: 0L,
                 isAutoSnoozeEnabled = preferences[KEY_AUTO_SNOOZE_ENABLED] ?: true,
-                lastAutoSnoozeEpochMs = preferences[KEY_LAST_AUTO_SNOOZE_EPOCH_MS] ?: 0L
+                lastAutoSnoozeEpochMs = preferences[KEY_LAST_AUTO_SNOOZE_EPOCH_MS] ?: 0L,
+                isFeedAdShieldEnabled = preferences[KEY_FEED_AD_SHIELD_ENABLED] ?: true,
+                isStoryAdShieldEnabled = preferences[KEY_STORY_AD_SHIELD_ENABLED] ?: true
             )
         }
 
     val isReelsFilterEnabled: Flow<Boolean> = filterPreferences.map { it.isReelsFilterEnabled }
     val isAutoSnoozeEnabled: Flow<Boolean> = filterPreferences.map { it.isAutoSnoozeEnabled }
     val lastAutoSnoozeEpochMs: Flow<Long> = filterPreferences.map { it.lastAutoSnoozeEpochMs }
+    val isFeedAdShieldEnabled: Flow<Boolean> = filterPreferences.map { it.isFeedAdShieldEnabled }
+    val isStoryAdShieldEnabled: Flow<Boolean> = filterPreferences.map { it.isStoryAdShieldEnabled }
+
+    suspend fun setFeedAdShieldEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[KEY_FEED_AD_SHIELD_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setStoryAdShieldEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[KEY_STORY_AD_SHIELD_ENABLED] = enabled
+        }
+    }
 
     suspend fun setFilterEnabled(enabled: Boolean) {
         dataStore.edit { preferences ->
@@ -81,6 +97,8 @@ class FilterPreferencesRepository(
         val KEY_PAUSE_UNTIL_EPOCH_MS = longPreferencesKey("key_pause_until_epoch_ms")
         val KEY_AUTO_SNOOZE_ENABLED = booleanPreferencesKey("key_auto_snooze_enabled")
         val KEY_LAST_AUTO_SNOOZE_EPOCH_MS = longPreferencesKey("key_last_auto_snooze_epoch_ms")
+        val KEY_FEED_AD_SHIELD_ENABLED = booleanPreferencesKey("key_feed_ad_shield_enabled")
+        val KEY_STORY_AD_SHIELD_ENABLED = booleanPreferencesKey("key_story_ad_shield_enabled")
 
         @Volatile
         private var instance: FilterPreferencesRepository? = null
