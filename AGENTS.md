@@ -403,6 +403,13 @@ Every ticket created in the database MUST contain:
     2. Gated on discrete stages: Zero Network Security Audit (`ZeroNetworkSecurityAuditTest`), Multi-Device Matrix Test (`MultiDeviceMatrixTest`), full test suite, and Android Lint.
     3. Configured packaging job building R8-optimized universal APK (`Unreel-universal.apk`), enforcing binary size budget (< 1.5MB), uploading workflow artifact, and publishing GitHub Releases.
 
+- **[2026-10-08 18:03:00] Discovery / Engineering Note**:
+  - Implemented [UNR-26] Cloud Device Farm Testing with Firebase Test Lab:
+    1. Engineered `scripts/run_firebase_test_lab.sh` targeting physical cloud device matrix: Pixel 6 (Android 13), Pixel 7 (Android 14), Galaxy S22 Ultra (Android 13), and Galaxy S23 Ultra (Android 14).
+    2. Automated compilation of `app-debug.apk` and `app-debug-androidTest.apk` running `RealDeviceSmokeTest`.
+    3. Verified with `--dry-run` validating prerequisites, CLI tooling (`gcloud`), and build outputs with 0 errors.
+
+
 
 
 

@@ -60,5 +60,5 @@ By reading the accessibility node hierarchy locally on-device:
 | **[UNR-23]** | Epic: Instagram AdShield - Story Ads Auto-Fast-Forward | `Done` | P1 - High | Accessibility |
 | **[UNR-24]** | Multi-Device Compatibility Test Matrix (Robolectric Multi-SDK & Screen Ratio Harness) | `Done` | P2 - Medium | Core / Engine |
 | **[UNR-25]** | Automated GitHub Actions CI Matrix & Universal Release Distribution | `Done` | P2 - Medium | Packaging |
-| **[UNR-26]** | Cloud Device Farm Testing with Firebase Test Lab | `Ready for SWE` | P3 - Low | Core / Engine |
+| **[UNR-26]** | Cloud Device Farm Testing with Firebase Test Lab | `Done` | P3 - Low | Core / Engine |
 | **[UNR-27]** | YouTube Shorts Elimination Companion Module | `Draft` | P3 - Low | Accessibility |
