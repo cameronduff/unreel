@@ -106,7 +106,12 @@ class UnreelAccessibilityService : AccessibilityService() {
         val root = resolveRootInActiveWindow()
         val rootCompat = if (root != null) AccessibilityNodeInfoCompat.wrap(root) else null
 
-        if (rootCompat == null) return
+        if (rootCompat == null) {
+            if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+                updateOverlay(false)
+            }
+            return
+        }
 
         // 3. PRIORITY 0: Emergency Reels Interception
         // If the user lands on a Reel or selects the Reels tab, suppress IMMEDIATELY via Back action
@@ -132,20 +137,24 @@ class UnreelAccessibilityService : AccessibilityService() {
 
         // 4. PRIORITY 1: Bottom Navigation Blackout Touch-Absorber Overlay
         // Maintain blackout touch-absorber overlay over the Reels tab button
-        // Check if any modal dialog, daily limit prompt, bottom sheet, or splash screen is active
-        val isSplashShowing = if (lastOverlayBounds == null || event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-            InstagramBottomNavDetector.isSplashScreenShowing(rootCompat)
+        // During feed scroll when overlay is already attached, bottom nav bar is static; keep overlay without re-querying
+        if (event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED && lastOverlayState == true && lastOverlayBounds != null) {
+            // Static nav bar already covered; skip re-querying
         } else {
-            false
-        }
-        val isModalOpen = InstagramModalDetector.isModalOrDialogPresent(rootCompat)
-        val reelsBounds = if (!isModalOpen && !isSplashShowing) InstagramBottomNavDetector.findReelsTabBounds(rootCompat) else null
-        Log.d(TAG, "Instagram active in foreground: isSplash=$isSplashShowing, isModalOpen=$isModalOpen, reelsBounds=$reelsBounds")
+            val isSplashShowing = if (lastOverlayBounds == null || event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+                InstagramBottomNavDetector.isSplashScreenShowing(rootCompat)
+            } else {
+                false
+            }
+            val isModalOpen = InstagramModalDetector.isModalOrDialogPresent(rootCompat)
+            val reelsBounds = if (!isModalOpen && !isSplashShowing) InstagramBottomNavDetector.findReelsTabBounds(rootCompat) else null
+            Log.d(TAG, "Instagram active in foreground: isSplash=$isSplashShowing, isModalOpen=$isModalOpen, reelsBounds=$reelsBounds")
 
-        if (reelsBounds != null) {
-            updateOverlay(true, reelsBounds)
-        } else {
-            updateOverlay(false)
+            if (reelsBounds != null) {
+                updateOverlay(true, reelsBounds)
+            } else {
+                updateOverlay(false)
+            }
         }
 
         // 5. Auto-snooze suggested posts in feed (every 30 days)

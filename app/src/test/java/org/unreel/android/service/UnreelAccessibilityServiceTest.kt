@@ -257,6 +257,36 @@ class UnreelAccessibilityServiceTest {
     }
 
     @Test
+    fun testWhenDirectMessageThreadPresentHidesOverlay() {
+        var lastOverlayShow: Boolean? = null
+        service.overlayController = { show, _ ->
+            lastOverlayShow = show
+        }
+
+        val dmThreadRoot = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/main_layout")
+            .addChild(
+                MockAccessibilityNodeBuilder()
+                    .setViewId("com.instagram.android:id/message_composer_bar")
+                    .addChild(
+                        MockAccessibilityNodeBuilder()
+                            .setViewId("com.instagram.android:id/row_thread_composer_container")
+                    )
+            )
+            .build()
+
+        service.rootNodeProvider = { dmThreadRoot.unwrap() as AccessibilityNodeInfo }
+
+        val event = AccessibilityEvent.obtain().apply {
+            packageName = UnreelAccessibilityService.TARGET_INSTAGRAM_PACKAGE
+            eventType = AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+        }
+
+        service.onAccessibilityEvent(event)
+        assertEquals(false, lastOverlayShow)
+    }
+
+    @Test
     fun testAutoSnoozeSuggestedPostSequence() {
         var recordedTrigger: String? = null
         val fakeDao = object : org.unreel.android.data.ReelsInterceptDao {

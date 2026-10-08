@@ -157,4 +157,43 @@ class InstagramBottomNavDetectorTest {
         assertFalse(InstagramBottomNavDetector.isSplashScreenShowing(feedRoot))
         assertFalse(InstagramBottomNavDetector.isSplashScreenShowing(null))
     }
+
+    @Test
+    fun testDirectThreadActiveReturnsTrueWhenComposerPresent() {
+        val threadRoot = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/direct_thread_layout")
+            .addChild(
+                MockAccessibilityNodeBuilder()
+                    .setViewId("com.instagram.android:id/row_thread_composer_container")
+            )
+            .build()
+
+        assertTrue(InstagramBottomNavDetector.isDirectThreadActive(threadRoot))
+    }
+
+    @Test
+    fun testFindReelsTabBoundsReturnsNullInDirectMessageConversation() {
+        // Even if a shared Reel message is in the thread, findReelsTabBounds must return null
+        val threadRoot = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/direct_thread_layout")
+            .addChild(
+                MockAccessibilityNodeBuilder()
+                    .setViewId("com.instagram.android:id/direct_message_list")
+                    .addChild(
+                        MockAccessibilityNodeBuilder()
+                            .setContentDescription("Reels")
+                            .setText("Reels")
+                            .setVisibleToUser(true)
+                    )
+            )
+            .addChild(
+                MockAccessibilityNodeBuilder()
+                    .setViewId("com.instagram.android:id/row_thread_composer_container")
+            )
+            .build()
+
+        val bounds = InstagramBottomNavDetector.findReelsTabBounds(threadRoot)
+        org.junit.Assert.assertNull(bounds)
+        assertFalse(InstagramBottomNavDetector.isFeedTabActive(threadRoot))
+    }
 }

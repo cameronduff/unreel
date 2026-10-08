@@ -24,6 +24,10 @@ object InstagramModalDetector {
         "com.instagram.android:id/direct_share_sheet",
         "com.instagram.android:id/reel_viewer_root",
         "com.instagram.android:id/row_thread_composer",
+        "com.instagram.android:id/row_thread_composer_container",
+        "com.instagram.android:id/message_composer_bar",
+        "com.instagram.android:id/direct_thread_layout",
+        "com.instagram.android:id/thread_fragment_container",
         "com.instagram.android:id/quick_capture_fragment_container"
     )
 
@@ -49,7 +53,10 @@ object InstagramModalDetector {
                 if (MODAL_CONTAINER_VIEW_IDS.contains(viewId) ||
                     viewId.contains("dialog") ||
                     viewId.contains("bottom_sheet") ||
-                    viewId.contains("action_sheet")
+                    viewId.contains("action_sheet") ||
+                    viewId.contains("thread_composer") ||
+                    viewId.contains("message_composer") ||
+                    viewId.contains("direct_thread")
                 ) {
                     if (current.isVisibleToUser && (current.childCount > 0 || current.text != null)) {
                         android.util.Log.d("UnreelModalDetector", "Matched modal container viewId='$viewId'")

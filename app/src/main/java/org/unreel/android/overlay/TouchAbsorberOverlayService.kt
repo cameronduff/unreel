@@ -162,8 +162,16 @@ class TouchAbsorberOverlayService : Service() {
         return START_NOT_STICKY
     }
 
+    override fun onCreate() {
+        super.onCreate()
+        instance = this
+    }
+
     override fun onDestroy() {
         detachOverlay()
+        if (instance === this) {
+            instance = null
+        }
         super.onDestroy()
     }
 
@@ -174,7 +182,15 @@ class TouchAbsorberOverlayService : Service() {
         const val ACTION_DETACH = "org.unreel.android.overlay.DETACH"
         const val EXTRA_BOUNDS = "extra_bounds"
 
+        @Volatile
+        internal var instance: TouchAbsorberOverlayService? = null
+
         fun show(context: Context, bounds: Rect? = null) {
+            val active = instance
+            if (active != null) {
+                active.attachOverlay(bounds)
+                return
+            }
             try {
                 val intent = Intent(context, TouchAbsorberOverlayService::class.java).apply {
                     action = ACTION_ATTACH
@@ -186,6 +202,11 @@ class TouchAbsorberOverlayService : Service() {
         }
 
         fun hide(context: Context) {
+            val active = instance
+            if (active != null) {
+                active.detachOverlay()
+                return
+            }
             try {
                 val intent = Intent(context, TouchAbsorberOverlayService::class.java).apply {
                     action = ACTION_DETACH

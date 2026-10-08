@@ -82,6 +82,43 @@ object InstagramBottomNavDetector {
     }
 
     /**
+     * Inspects the view hierarchy to determine if the user is inside a direct message
+     * chat / conversation thread, where the bottom navigation bar is absent and replaced
+     * by the message composer.
+     */
+    fun isDirectThreadActive(rootNode: AccessibilityNodeInfoCompat?): Boolean {
+        if (rootNode == null) return false
+
+        val queue = ArrayDeque<AccessibilityNodeInfoCompat>()
+        queue.add(rootNode)
+        var visitedCount = 0
+
+        while (queue.isNotEmpty() && visitedCount < MAX_NODE_TRAVERSAL_LIMIT) {
+            val current = queue.poll() ?: continue
+            visitedCount++
+
+            val viewId = current.viewIdResourceName
+            if (viewId != null && (
+                viewId.contains("row_thread_composer", ignoreCase = true) ||
+                viewId.contains("message_composer", ignoreCase = true) ||
+                viewId.contains("direct_thread", ignoreCase = true) ||
+                viewId.contains("thread_fragment", ignoreCase = true) ||
+                viewId.contains("direct_message_list", ignoreCase = true)
+            )) {
+                return true
+            }
+
+            val childCount = current.childCount
+            for (i in 0 until childCount) {
+                val child = current.getChild(i) ?: continue
+                queue.add(child)
+            }
+        }
+
+        return false
+    }
+
+    /**
      * Inspects the view hierarchy root node to locate the screen bounds of the Reels
      * bottom navigation tab (whether selected or not), to allow the touch absorber
      * overlay to position itself with pixel precision over the button.
@@ -96,11 +133,27 @@ object InstagramBottomNavDetector {
         queue.add(rootNode)
         var visitedCount = 0
 
+        val minBottomY = if (rootBounds.height() > 500) {
+            rootBounds.bottom - (rootBounds.height() * 0.18)
+        } else {
+            0.0
+        }
+
         while (queue.isNotEmpty() && visitedCount < MAX_NODE_TRAVERSAL_LIMIT) {
             val current = queue.poll() ?: continue
             visitedCount++
 
             val viewId = current.viewIdResourceName
+            if (viewId != null && (
+                viewId.contains("row_thread_composer", ignoreCase = true) ||
+                viewId.contains("message_composer", ignoreCase = true) ||
+                viewId.contains("direct_thread", ignoreCase = true) ||
+                viewId.contains("thread_fragment", ignoreCase = true)
+            )) {
+                // Inside DM conversation or composer: bottom nav bar is absent
+                return null
+            }
+
             val desc = current.contentDescription?.toString()
             val text = current.text?.toString()
 
@@ -112,7 +165,7 @@ object InstagramBottomNavDetector {
                 val rect = android.graphics.Rect()
                 current.getBoundsInScreen(rect)
                 if (rect.width() > 0 && rect.height() > 0) {
-                    if (rootBounds.height() == 0 || rect.bottom >= (rootBounds.bottom - (rootBounds.height() * 0.35))) {
+                    if (rootBounds.height() == 0 || rect.bottom >= minBottomY) {
                         return rect
                     }
                 }
@@ -133,6 +186,7 @@ object InstagramBottomNavDetector {
      */
     fun isFeedTabActive(rootNode: AccessibilityNodeInfoCompat?): Boolean {
         if (rootNode == null) return false
+        if (isDirectThreadActive(rootNode)) return false
 
         val queue = ArrayDeque<AccessibilityNodeInfoCompat>()
         queue.add(rootNode)

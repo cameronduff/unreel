@@ -103,4 +103,26 @@ class InstagramModalDetectorTest {
 
         assertTrue(InstagramModalDetector.isModalOrDialogPresent(root))
     }
+
+    @Test
+    fun testDirectMessageComposerReturnsTrue() {
+        val root = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/main_layout")
+            .addChild(
+                MockAccessibilityNodeBuilder()
+                    .setViewId("com.instagram.android:id/message_composer_bar")
+                    .addChild(
+                        MockAccessibilityNodeBuilder()
+                            .setViewId("com.instagram.android:id/row_thread_composer_container")
+                            .addChild(
+                                MockAccessibilityNodeBuilder()
+                                    .setViewId("com.instagram.android:id/row_thread_composer_edittext")
+                                    .setText("Message...")
+                            )
+                    )
+            )
+            .build()
+
+        assertTrue(InstagramModalDetector.isModalOrDialogPresent(root))
+    }
 }
