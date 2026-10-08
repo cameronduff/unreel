@@ -390,4 +390,12 @@ Every ticket created in the database MUST contain:
     3. Enabled `android:canPerformGestures="true"` in accessibility service config. Logged intercept telemetry to Room database (`TRIGGER_STORY_AD_SHIELD`).
     4. Verified across 131 unit tests (100% pass rate).
 
+- **[2026-10-08 17:58:00] Discovery / Engineering Note**:
+  - Implemented [UNR-24] Multi-Device Compatibility Test Matrix:
+    1. Engineered `MultiDeviceMatrixTest.kt` verifying coordinate calculations, bottom navigation tab detection, story ad fast-forward coordinates, and full-screen clips coverage across 11 device profiles.
+    2. Covered aspect ratios: 16:9 (720x1280, 1080x1920), 18:9 (1080x2160), 19.5:9 (1080x2340 Pixel 4a / Galaxy S23), 20:9 (1344x2992 Pixel 8 Pro, 1440x3088 S23 Ultra, 1080x2400 Redmi), and Foldables/Tablets (1840x2208 Pixel Fold, 1812x2176 Z Fold5, 1600x2560 Tablet).
+    3. Verified API level compatibility across Android 10 (API 29) through Android 15 (API 35).
+    4. All 136 unit tests passing (100% pass rate).
+
+
 
