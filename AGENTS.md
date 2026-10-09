@@ -469,3 +469,23 @@ Every ticket created in the database MUST contain:
     4. Off-Screen & Compose Hierarchy Fixes: Added `isVisibleOnScreen` bounds checks in `InstagramHierarchyScanner.kt` to reject off-screen fragment nodes, removed eager `isSubscreenOrComposer` short-circuiting on generic `ComposeView`, and ensured `reelsTabBounds` governs overlay attachment on both Home Feed and Messages inbox tabs.
     5. Physical Device Verification: Confirmed on Google Pixel 4a with frame capture (`thread_100ms.png`, `thread_600ms.png`, `settings_tap.png`) that navigating into Direct message threads, Settings, and Google Play modals has 0ms lingering box delay (text composer is completely clear from frame 1). All 176 unit tests pass cleanly in `./gradlew testDebugUnitTest`.
 
+- **[2026-10-09 13:54:00] Discovery / Engineering Note**:
+  - Implemented [UNR-39] (Zero-Delay Pre-Emptive Input Detection (FLAG_WATCH_OUTSIDE_TOUCH) & SurfaceFlinger Zero-Alpha Teardown):
+    1. Root Cause Diagnosis:
+       - Accessibility events (`TYPE_WINDOW_CONTENT_CHANGED`, `TYPE_WINDOW_STATE_CHANGED`) are deliberately delayed/coalesced by the Android framework during Activity and Fragment transitions until slide animations complete (~300–350ms).
+       - Instagram uses custom gesture detectors on inbox items and Jetpack Compose on Settings, bypassing `TYPE_VIEW_CLICKED` accessibility events altogether.
+       - SurfaceFlinger buffer freezing: Calling `view.visibility = View.GONE` or `removeView()` stops the View tree from submitting new draw commands, causing SurfaceFlinger to freeze the last opaque black box buffer and composite it on screen until WindowManager destroys the window surface after transition completion.
+    2. Zero-Delay Hardware Touch Interception (`FLAG_WATCH_OUTSIDE_TOUCH`):
+       - Configured `TouchAbsorberOverlayService` WindowManager.LayoutParams with `FLAG_WATCH_OUTSIDE_TOUCH`.
+       - Implemented `handleOutsideTouch`: On the very first hardware touch down (`MotionEvent.ACTION_OUTSIDE`), if the touch occurs in the content area (`rawY < tabTop - 30`), the overlay immediately sets `view.setBackgroundColor(Color.TRANSPARENT)` and `params.alpha = 0f` and updates layout before hiding.
+       - Dispatches to `onOutsideContentTouchListener` notifying `UnreelAccessibilityService` to update state to hidden on Frame 0 (0ms), while preserving the overlay when touches land in the bottom navigation bar (`rawY >= tabTop - 30`).
+    3. SurfaceFlinger Zero-Alpha Teardown:
+       - In `detachOverlay()`, immediately sets `view.setBackgroundColor(Color.TRANSPARENT)` and `params.alpha = 0f` via `updateViewLayout()`. SurfaceControl sets layer opacity to 0% synchronously on the hardware compositor, preventing any visual ghosting or lingering box buffer during teardown animations.
+    4. Navigational Click Guard & Singleton Hygiene:
+       - Fixed `isNavigationalClick` to reject whole-window root containers (`height > 1800 && width > 900`).
+       - Enforced strict overlay window singleton management with safe `removeViewImmediate` cleanup before adding a new window.
+    5. Verification & Testing:
+       - 179 unit tests passing (`./gradlew testDebugUnitTest`).
+       - Physical Google Pixel 4a high-speed 20fps screen recording verification: Frame-by-frame analysis (`zdc_016.png` tap -> `zdc_017.png` +50ms -> `zdc_025.png` +450ms) proves the overlay is already 100% invisible on Frame 0 with 0ms lingering over text composers or settings menus.
+
+

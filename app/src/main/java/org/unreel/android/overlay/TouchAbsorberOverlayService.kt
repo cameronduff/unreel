@@ -29,6 +29,54 @@ class TouchAbsorberOverlayService : Service() {
     internal val windowManager: WindowManager
         get() = windowManagerOverride ?: (getSystemService(Context.WINDOW_SERVICE) as WindowManager)
 
+    internal var onOutsideContentTouch: (() -> Unit)? = null
+    internal var watchdogRestoreCheck: (() -> Boolean)? = null
+    private val watchdogHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val watchdogRestoreRunnable = Runnable {
+        if (isOverlayAttached && overlayView != null && overlayView?.visibility == View.GONE) {
+            val shouldRestore = (watchdogRestoreCheck?.invoke() ?: watchdogRestoreCheckListener?.invoke()) ?: true
+            if (shouldRestore) {
+                android.util.Log.i("TouchAbsorber", "Watchdog: Restoring overlay visibility after idle touch")
+                overlayView?.visibility = View.VISIBLE
+            }
+        }
+    }
+
+    internal fun handleOutsideTouch(event: MotionEvent) {
+        val bounds = currentBounds ?: return
+        val tabTop = bounds.top
+
+        // Detect if touch occurred in content area above the bottom navigation bar
+        val isContentTouch = if (event.rawY > 0) {
+            event.rawY < (tabTop - 30)
+        } else {
+            event.y < -30
+        }
+
+        if (isContentTouch) {
+            android.util.Log.i("TouchAbsorber", "Content area touch detected (rawY=${event.rawY}, y=${event.y}, tabTop=$tabTop) -> PRE-EMPTIVELY HIDING OVERLAY (0ms)")
+            val view = overlayView
+            if (view != null) {
+                view.setBackgroundColor(Color.TRANSPARENT)
+                val params = view.layoutParams as? WindowManager.LayoutParams
+                if (params != null) {
+                    params.alpha = 0f
+                    try {
+                        windowManager.updateViewLayout(view, params)
+                    } catch (_: Exception) {}
+                }
+                view.visibility = View.GONE
+            }
+            onOutsideContentTouch?.invoke()
+            onOutsideContentTouchListener?.invoke()
+
+            watchdogHandler.removeCallbacks(watchdogRestoreRunnable)
+            watchdogHandler.postDelayed(watchdogRestoreRunnable, 400L)
+        } else {
+            android.util.Log.d("TouchAbsorber", "Bottom navigation touch detected (rawY=${event.rawY}, y=${event.y}, tabTop=$tabTop) -> maintaining overlay")
+        }
+    }
+
     private fun canDrawOverlays(): Boolean {
         return canDrawOverlaysCheck?.invoke() ?: Settings.canDrawOverlays(this)
     }
@@ -53,17 +101,22 @@ class TouchAbsorberOverlayService : Service() {
         android.util.Log.i("TouchAbsorber", "attachOverlay requested: targetRect=$targetRect, calculated=$rect, isAttached=$isOverlayAttached")
 
         if (isOverlayAttached && overlayView != null) {
+            overlayView?.setBackgroundColor(Color.parseColor("#0D1014"))
             overlayView?.visibility = View.VISIBLE
+            val params = overlayView!!.layoutParams as WindowManager.LayoutParams
+            params.alpha = 1f
+            params.width = rect.width()
+            params.height = rect.height()
             if (currentBounds == rect) {
+                try {
+                    windowManager.updateViewLayout(overlayView, params)
+                } catch (_: Exception) {}
                 return true
             }
             currentBounds = rect
             try {
-                val params = overlayView!!.layoutParams as WindowManager.LayoutParams
                 params.x = rect.left
                 params.y = rect.top
-                params.width = rect.width()
-                params.height = rect.height()
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     params.fitInsetsTypes = 0
                 }
@@ -89,7 +142,8 @@ class TouchAbsorberOverlayService : Service() {
             layoutType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
@@ -106,17 +160,28 @@ class TouchAbsorberOverlayService : Service() {
         val view = View(this).apply {
             setBackgroundColor(Color.parseColor("#0D1014"))
             setOnTouchListener { _, event ->
-                if (event.action == MotionEvent.ACTION_DOWN) {
-                    android.util.Log.w("TouchAbsorber", "Absorbed touch on Reels tab position!")
-                    onTouchAbsorbed?.invoke()
-                    true
-                } else {
-                    true
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        android.util.Log.w("TouchAbsorber", "Absorbed touch on Reels tab position!")
+                        onTouchAbsorbed?.invoke()
+                        true
+                    }
+                    MotionEvent.ACTION_OUTSIDE -> {
+                        handleOutsideTouch(event)
+                        false
+                    }
+                    else -> true
                 }
             }
         }
 
         try {
+            if (overlayView != null) {
+                try {
+                    windowManager.removeViewImmediate(overlayView)
+                } catch (_: Exception) {}
+                overlayView = null
+            }
             windowManager.addView(view, params)
             overlayView = view
             currentBounds = rect
@@ -131,17 +196,31 @@ class TouchAbsorberOverlayService : Service() {
 
     fun detachOverlay() {
         android.util.Log.i("TouchAbsorber", "detachOverlay called: isAttached=$isOverlayAttached")
-        if (isOverlayAttached && overlayView != null) {
+        watchdogHandler.removeCallbacks(watchdogRestoreRunnable)
+        val view = overlayView
+        overlayView = null
+        currentBounds = null
+        isOverlayAttached = false
+
+        if (view != null) {
             try {
-                overlayView?.visibility = View.GONE
-                windowManager.removeView(overlayView)
+                view.setBackgroundColor(Color.TRANSPARENT)
+                val params = view.layoutParams as? WindowManager.LayoutParams
+                if (params != null) {
+                    params.alpha = 0f
+                    try {
+                        windowManager.updateViewLayout(view, params)
+                    } catch (_: Exception) {}
+                }
+                view.visibility = View.GONE
+                try {
+                    windowManager.removeViewImmediate(view)
+                } catch (_: Exception) {
+                    windowManager.removeView(view)
+                }
                 android.util.Log.i("TouchAbsorber", "Overlay view removed from WindowManager")
             } catch (e: Exception) {
                 android.util.Log.w("TouchAbsorber", "View might already be detached", e)
-            } finally {
-                overlayView = null
-                currentBounds = null
-                isOverlayAttached = false
             }
         }
     }
@@ -193,6 +272,12 @@ class TouchAbsorberOverlayService : Service() {
 
         @Volatile
         internal var instance: TouchAbsorberOverlayService? = null
+
+        @Volatile
+        internal var onOutsideContentTouchListener: (() -> Unit)? = null
+
+        @Volatile
+        internal var watchdogRestoreCheckListener: (() -> Boolean)? = null
 
         fun show(context: Context, bounds: Rect? = null) {
             if (bounds == null) {

@@ -157,4 +157,47 @@ class TouchAbsorberOverlayServiceTest {
         assertFalse(service.isOverlayAttached)
         assertNull(service.overlayView)
     }
+
+    @Test
+    fun testAttachOverlaySetsFlagWatchOutsideTouch() {
+        service.canDrawOverlaysCheck = { true }
+        service.attachOverlay(Rect(216, 2142, 432, 2274))
+        val params = service.overlayView!!.layoutParams as WindowManager.LayoutParams
+        assertTrue(
+            "FLAG_WATCH_OUTSIDE_TOUCH must be enabled",
+            (params.flags and WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH) != 0
+        )
+    }
+
+    @Test
+    fun testHandleOutsideTouchInContentAreaPreemptivelyHidesOverlay() {
+        service.canDrawOverlaysCheck = { true }
+        var callbackInvoked = false
+        service.onOutsideContentTouch = { callbackInvoked = true }
+        service.attachOverlay(Rect(216, 2142, 432, 2274))
+
+        val now = SystemClock.uptimeMillis()
+        val outsideEvent = MotionEvent.obtain(now, now, MotionEvent.ACTION_OUTSIDE, 400f, -500f, 0)
+        service.handleOutsideTouch(outsideEvent)
+        outsideEvent.recycle()
+
+        assertTrue("Callback must be called on content touch", callbackInvoked)
+        assertEquals("Overlay must be GONE immediately", View.GONE, service.overlayView?.visibility)
+    }
+
+    @Test
+    fun testHandleOutsideTouchInBottomBarMaintainsOverlay() {
+        service.canDrawOverlaysCheck = { true }
+        var callbackInvoked = false
+        service.onOutsideContentTouch = { callbackInvoked = true }
+        service.attachOverlay(Rect(216, 2142, 432, 2274))
+
+        val now = SystemClock.uptimeMillis()
+        val bottomBarEvent = MotionEvent.obtain(now, now, MotionEvent.ACTION_OUTSIDE, 100f, 2200f, 0)
+        service.handleOutsideTouch(bottomBarEvent)
+        bottomBarEvent.recycle()
+
+        assertFalse("Callback should not be called for bottom bar tab touches", callbackInvoked)
+        assertEquals("Overlay must remain VISIBLE for bottom bar tab touches", View.VISIBLE, service.overlayView?.visibility)
+    }
 }

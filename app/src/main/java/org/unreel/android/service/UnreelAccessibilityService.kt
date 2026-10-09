@@ -70,6 +70,15 @@ class UnreelAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         Log.i(TAG, "Unreel Accessibility Service connected and ready")
+
+        TouchAbsorberOverlayService.onOutsideContentTouchListener = {
+            Log.d(TAG, "Fast-path input: Outside content touch intercepted by overlay -> immediate detachment (0ms)")
+            updateOverlay(false)
+        }
+        TouchAbsorberOverlayService.watchdogRestoreCheckListener = {
+            currentForegroundActivity?.contains("ModalActivity") != true && cachedTabBounds != null
+        }
+
         val repo = repositoryProvider?.invoke() ?: FilterPreferencesRepository.getInstance(this)
         serviceScope.launch {
             repo.filterPreferences.collect { prefs ->
@@ -128,9 +137,10 @@ class UnreelAccessibilityService : AccessibilityService() {
         }
 
         // Fast-Path 2: Instant Pre-Emptive Detachment on Navigation & Subscreen Clicks (0ms)
-        if (event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED) {
+        if (event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED ||
+            event.eventType == AccessibilityEvent.TYPE_VIEW_SELECTED) {
             if (isNavigationalClick(event)) {
-                Log.d(TAG, "Fast-path 2: Navigational click detected -> immediate overlay detachment (0ms)")
+                Log.d(TAG, "Fast-path 2: Navigational click/selection detected -> immediate overlay detachment (0ms)")
                 updateOverlay(false)
                 return
             }
@@ -272,16 +282,30 @@ class UnreelAccessibilityService : AccessibilityService() {
     }
 
     internal fun isNavigationalClick(event: AccessibilityEvent): Boolean {
-        if (event.eventType != AccessibilityEvent.TYPE_VIEW_CLICKED) return false
+        if (event.eventType != AccessibilityEvent.TYPE_VIEW_CLICKED &&
+            event.eventType != AccessibilityEvent.TYPE_VIEW_SELECTED) return false
 
         val source = event.source ?: resolveRootInActiveWindow() ?: return false
         val node = AccessibilityNodeInfoCompat.wrap(source)
 
+        val desc = (node.contentDescription ?: event.contentDescription)?.toString() ?: ""
+
+        // Immediate navigational match for back or close actions
+        if (desc.equals("Back", ignoreCase = true) ||
+            desc.equals("Close", ignoreCase = true) ||
+            desc.equals("Navigate up", ignoreCase = true)) {
+            return true
+        }
+
         val clickBounds = android.graphics.Rect()
         node.getBoundsInScreen(clickBounds)
 
+        // If fallback node is the entire window root container (>1800px tall), reject to avoid false bounds
+        if (event.source == null && clickBounds.height() > 1800 && clickBounds.width() > 900) {
+            return false
+        }
+
         val viewId = node.viewIdResourceName ?: ""
-        val desc = (node.contentDescription ?: event.contentDescription)?.toString() ?: ""
 
         // 1. Bottom navigation bar tabs - ignore so tab switching maintains bottom bar state
         if (viewId.contains("feed_tab", ignoreCase = true) ||

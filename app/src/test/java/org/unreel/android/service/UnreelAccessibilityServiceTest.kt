@@ -448,7 +448,11 @@ class UnreelAccessibilityServiceTest {
 
         assertEquals(InstagramFeedAdShield.State.IDLE, service.feedAdShield.state)
         org.robolectric.shadows.ShadowLooper.idleMainLooper()
-        Thread.sleep(100)
+        val deadline = System.currentTimeMillis() + 1000
+        while (recordedTrigger == null && System.currentTimeMillis() < deadline) {
+            org.robolectric.shadows.ShadowLooper.idleMainLooper()
+            Thread.sleep(50)
+        }
         assertEquals(org.unreel.android.data.ReelsInterceptEntity.TRIGGER_FEED_AD_SHIELD, recordedTrigger)
     }
 
