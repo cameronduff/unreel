@@ -3,6 +3,7 @@ package org.unreel.android.overlay
 import android.graphics.Rect
 import android.os.SystemClock
 import android.view.MotionEvent
+import android.view.View
 import android.view.WindowManager
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.After
@@ -141,5 +142,19 @@ class TouchAbsorberOverlayServiceTest {
         val success = service.attachOverlay(updated)
         assertTrue(success)
         assertEquals(updated, service.currentBounds)
+    }
+
+    @Test
+    fun testDetachOverlaySetsVisibilityGoneBeforeRemoval() {
+        service.canDrawOverlaysCheck = { true }
+        service.attachOverlay(Rect(100, 100, 200, 200))
+        val view = service.overlayView!!
+        assertEquals(View.VISIBLE, view.visibility)
+
+        service.detachOverlay()
+
+        assertEquals(View.GONE, view.visibility)
+        assertFalse(service.isOverlayAttached)
+        assertNull(service.overlayView)
     }
 }

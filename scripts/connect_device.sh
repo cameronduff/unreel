@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 # Ensure native Linux ADB is used
-export PATH="/home/cameron/.local/bin:/home/cameron/.local/android-sdk/platform-tools:$PATH"
+export PATH="${HOME}/.local/bin:${HOME}/.local/android-sdk/platform-tools:/usr/local/bin:$PATH"
 
 echo "======================================================================"
 echo "  ⚡ UNREEL: Android Test Device Connection Manager"

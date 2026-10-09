@@ -8,7 +8,7 @@ import java.util.regex.Pattern
 object InstagramHierarchyScanner {
 
     private val REELS_WORD_PATTERN = Pattern.compile("(?i)\\breels?\\b")
-    private const val MAX_NODE_TRAVERSAL_LIMIT = 70
+    private const val MAX_NODE_TRAVERSAL_LIMIT = 75
 
     data class ScanResult(
         val isClipsVisible: Boolean = false,
@@ -40,6 +40,7 @@ object InstagramHierarchyScanner {
         var isClips = false
         var isReelsTabSel = false
         var isDirect = false
+        var isSubscreenOrComposer = false
         var isModal = false
         var isSplash = false
         var tabBounds: Rect? = null
@@ -62,26 +63,65 @@ object InstagramHierarchyScanner {
                 isClips = true
             }
 
-            // 2. Direct Thread / Message Composer Detection
-            if (!isDirect && viewId != null && (
-                viewId.contains("row_thread_composer", ignoreCase = true) ||
-                viewId.contains("message_composer", ignoreCase = true) ||
-                viewId.contains("direct_thread", ignoreCase = true) ||
-                viewId.contains("thread_fragment", ignoreCase = true) ||
-                viewId.contains("direct_message_list", ignoreCase = true) ||
-                viewId.contains("direct_text_message", ignoreCase = true) ||
-                viewId.contains("message_thread_container", ignoreCase = true) ||
-                viewId.contains("message_list", ignoreCase = true) ||
-                viewId.contains("direct_command_picker", ignoreCase = true) ||
-                viewId.contains("meta_ai_voice_container", ignoreCase = true) ||
-                viewId.contains("blurred_text_area_background", ignoreCase = true) ||
-                viewId.contains("row_thread", ignoreCase = true)
-            )) {
-                isDirect = true
+            // 2. Direct Thread / Message Composer / Non-Feed Subscreen / Back Button Detection
+            if (!isSubscreenOrComposer && current.isVisibleToUser) {
+                val nodeBounds = Rect()
+                current.getBoundsInScreen(nodeBounds)
+                val isVisibleOnScreen = (nodeBounds.width() == 0 || rootBounds.width() == 0 || (nodeBounds.left < rootBounds.right && nodeBounds.right > rootBounds.left)) &&
+                    (nodeBounds.height() == 0 || rootBounds.height() == 0 || (nodeBounds.top < rootBounds.bottom && nodeBounds.bottom > rootBounds.top))
+
+                if (isVisibleOnScreen) {
+                    val inTopZone = (nodeBounds.height() == 0) || (nodeBounds.top <= 500 && nodeBounds.bottom <= 650 &&
+                        (nodeBounds.left in 0..400 || (rootBounds.right > 0 && nodeBounds.right in (rootBounds.right - 400)..rootBounds.right)))
+                    val isBackButton = inTopZone && (
+                        (desc != null && (desc.equals("Back", ignoreCase = true) || desc.equals("Close", ignoreCase = true) || desc.equals("Navigate up", ignoreCase = true))) ||
+                        (text != null && (text.equals("Back", ignoreCase = true) || text.equals("Close", ignoreCase = true))) ||
+                        (viewId != null && (
+                            viewId.contains("header_left_button", ignoreCase = true) ||
+                            viewId.contains("action_bar_button_back", ignoreCase = true) ||
+                            viewId.contains("action_bar_back_button", ignoreCase = true) ||
+                            viewId.contains("action_bar_left_button", ignoreCase = true) ||
+                            viewId.contains("back_button", ignoreCase = true)
+                        ))
+                    )
+
+                    if (isBackButton) {
+                        isDirect = true
+                        isSubscreenOrComposer = true
+                        android.util.Log.d("UnreelScanner", "Matched isBackButton: viewId='$viewId', desc='$desc', text='$text', bounds=$nodeBounds")
+                    } else if (viewId != null && (
+                        viewId.contains("row_thread_composer", ignoreCase = true) ||
+                        viewId.contains("message_composer", ignoreCase = true) ||
+                        viewId.contains("direct_thread", ignoreCase = true) ||
+                        viewId.contains("thread_fragment", ignoreCase = true) ||
+                        viewId.contains("direct_message_list", ignoreCase = true) ||
+                        viewId.contains("direct_text_message", ignoreCase = true) ||
+                        viewId.contains("message_thread_container", ignoreCase = true) ||
+                        viewId.contains("message_list", ignoreCase = true) ||
+                        viewId.contains("direct_command_picker", ignoreCase = true) ||
+                        viewId.contains("meta_ai_voice_container", ignoreCase = true) ||
+                        viewId.contains("blurred_text_area_background", ignoreCase = true) ||
+                        viewId.contains("layout_comment_thread", ignoreCase = true) ||
+                        viewId.contains("comment_composer", ignoreCase = true)
+                    )) {
+                        isDirect = true
+                        isSubscreenOrComposer = true
+                        android.util.Log.d("UnreelScanner", "Matched directViewId: '$viewId'")
+                    } else if (viewId != null && (
+                        viewId.contains("direct_inbox", ignoreCase = true) ||
+                        viewId.contains("inbox_refreshable_thread", ignoreCase = true)
+                    )) {
+                        isDirect = true
+                        android.util.Log.d("UnreelScanner", "Matched inboxViewId: '$viewId'")
+                    } else if (className != null && className.contains("ComposeView")) {
+                        isDirect = true
+                        android.util.Log.d("UnreelScanner", "Matched ComposeView: '$className'")
+                    }
+                }
             }
 
             // 3. Modal / Dialog Detection
-            if (!isModal) {
+            if (!isModal && current.isVisibleToUser) {
                 if (viewId != null && (
                     viewId.contains("dialog_container", ignoreCase = true) ||
                     viewId.contains("igds_modal", ignoreCase = true) ||
@@ -111,24 +151,29 @@ object InstagramHierarchyScanner {
                     className.contains("SplashScreen", ignoreCase = true) ||
                     className.contains("IgSplashScreen", ignoreCase = true)
                 )) {
-                    isSplash = true
+                    if (current.isVisibleToUser) {
+                        isSplash = true
+                    }
                 }
             }
 
             // 5. Verified Bottom Navigation Bar Container & Reels Tab Bounds
-            if (tabBounds == null && !isDirect) {
+            if (tabBounds == null && !isSubscreenOrComposer) {
                 val isNavBarContainer = isNavBarNode(current, rootBounds, minBottomY)
                 if (isNavBarContainer) {
-                    val bounds = resolveReelsTabFromContainer(current, rootBounds)
-                    if (bounds != null) {
-                        tabBounds = bounds
+                    val res = resolveReelsTabFromContainer(current, rootBounds)
+                    if (res.bounds != null) {
+                        tabBounds = res.bounds
+                        if (res.isSelected) {
+                            isReelsTabSel = true
+                        }
                         isSplash = false // If bottom nav bar is present, splash screen is definitely gone
                     }
                 }
             }
 
             // 1b. Reels Tab Selected Detection
-            if (!isReelsTabSel && current.isSelected) {
+            if (!isReelsTabSel && current.isVisibleToUser && current.isSelected) {
                 val isReelsNode = (viewId != null && (viewId.contains("reels_tab", ignoreCase = true) || viewId.contains("clips_tab", ignoreCase = true))) ||
                     (desc != null && REELS_WORD_PATTERN.matcher(desc).find()) ||
                     (text != null && REELS_WORD_PATTERN.matcher(text).find())
@@ -155,20 +200,34 @@ object InstagramHierarchyScanner {
                 )
             }
 
+            // Short-circuit: If subscreen or direct thread composer detected, stop scanning immediately
+            if (isSubscreenOrComposer) {
+                return ScanResult(
+                    isClipsVisible = false,
+                    isReelsTabSelected = false,
+                    isDirectThreadActive = true,
+                    isModalOpen = isModal,
+                    isSplashScreenShowing = false,
+                    reelsTabBounds = null,
+                    nodesVisited = visitedCount
+                )
+            }
+
             val childCount = current.childCount
-            for (i in 0 until childCount) {
+            for (i in childCount - 1 downTo 0) {
                 val child = current.getChild(i) ?: continue
                 queue.add(child)
             }
         }
 
+        val suppressOverlay = isSubscreenOrComposer || isModal || isSplash || (isDirect && tabBounds == null)
         return ScanResult(
             isClipsVisible = isClips,
             isReelsTabSelected = isReelsTabSel,
             isDirectThreadActive = isDirect,
             isModalOpen = isModal,
             isSplashScreenShowing = isSplash,
-            reelsTabBounds = if (isDirect) null else tabBounds,
+            reelsTabBounds = if (suppressOverlay) null else tabBounds,
             nodesVisited = visitedCount
         )
     }
@@ -178,6 +237,9 @@ object InstagramHierarchyScanner {
         rootBounds: Rect,
         minBottomY: Double
     ): Boolean {
+        if (!node.isVisibleToUser) {
+            return false
+        }
         val viewId = node.viewIdResourceName
         val isNavBarId = viewId != null && (
             viewId.endsWith(":id/tab_bar") ||
@@ -228,10 +290,15 @@ object InstagramHierarchyScanner {
         return false
     }
 
+    data class TabResolution(
+        val bounds: Rect? = null,
+        val isSelected: Boolean = false
+    )
+
     private fun resolveReelsTabFromContainer(
         container: AccessibilityNodeInfoCompat,
         rootBounds: Rect
-    ): Rect? {
+    ): TabResolution {
         for (i in 0 until container.childCount) {
             val child = container.getChild(i) ?: continue
             val viewId = child.viewIdResourceName
@@ -246,7 +313,7 @@ object InstagramHierarchyScanner {
                 val rect = Rect()
                 child.getBoundsInScreen(rect)
                 if (rect.width() > 0 && rect.height() > 0) {
-                    return rect
+                    return TabResolution(rect, child.isSelected)
                 }
             }
 
@@ -264,12 +331,12 @@ object InstagramHierarchyScanner {
                     val rect = Rect()
                     grandChild.getBoundsInScreen(rect)
                     if (rect.width() > 0 && rect.height() > 0) {
-                        return rect
+                        return TabResolution(rect, child.isSelected || grandChild.isSelected)
                     }
                 }
             }
         }
 
-        return null
+        return TabResolution()
     }
 }

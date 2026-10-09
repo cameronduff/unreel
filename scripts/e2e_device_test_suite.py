@@ -20,9 +20,10 @@ import time
 import subprocess
 import sqlite3
 import re
+import shutil
 from datetime import datetime
 
-ADB = "/home/cameron/.local/bin/adb"
+ADB = shutil.which("adb") or os.path.expanduser("~/.local/bin/adb")
 PACKAGE_NAME = "org.unreel.android"
 SERVICE_NAME = "org.unreel.android/.service.UnreelAccessibilityService"
 INSTAGRAM_PKG = "com.instagram.android"

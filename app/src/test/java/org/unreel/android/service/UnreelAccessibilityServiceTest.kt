@@ -512,5 +512,101 @@ class UnreelAccessibilityServiceTest {
         Thread.sleep(100)
         assertEquals(org.unreel.android.data.ReelsInterceptEntity.TRIGGER_STORY_AD_SHIELD, recordedTrigger)
     }
+
+    @Test
+    fun testNavigationalClickOnConversationRowDetachesOverlayPreemptively() {
+        var overlayShown: Boolean? = null
+        service.overlayController = { show, _ ->
+            overlayShown = show
+        }
+
+        val threadRow = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/row_thread_container")
+            .setBounds(android.graphics.Rect(0, 500, 1080, 700))
+            .build()
+        service.rootNodeProvider = { threadRow.unwrap() as AccessibilityNodeInfo }
+
+        val event = AccessibilityEvent.obtain().apply {
+            packageName = UnreelAccessibilityService.TARGET_INSTAGRAM_PACKAGE
+            eventType = AccessibilityEvent.TYPE_VIEW_CLICKED
+        }
+
+        service.onAccessibilityEvent(event)
+        assertEquals("Fast-path 2 must pre-emptively detach overlay on thread row click", false, overlayShown)
+    }
+
+    @Test
+    fun testNavigationalClickOnBackButtonDetachesOverlayPreemptively() {
+        var overlayShown: Boolean? = null
+        service.overlayController = { show, _ ->
+            overlayShown = show
+        }
+
+        val backButton = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/action_bar_button_back")
+            .setContentDescription("Back")
+            .setBounds(android.graphics.Rect(50, 150, 150, 250))
+            .build()
+        service.rootNodeProvider = { backButton.unwrap() as AccessibilityNodeInfo }
+
+        val event = AccessibilityEvent.obtain().apply {
+            packageName = UnreelAccessibilityService.TARGET_INSTAGRAM_PACKAGE
+            eventType = AccessibilityEvent.TYPE_VIEW_CLICKED
+        }
+
+        service.onAccessibilityEvent(event)
+        assertEquals("Fast-path 2 must pre-emptively detach overlay on back button click", false, overlayShown)
+    }
+
+    @Test
+    fun testBottomBarTabClickDoesNotTriggerPreemptiveDetachment() {
+        val tabNode = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/feed_tab")
+            .setContentDescription("Home")
+            .setBounds(android.graphics.Rect(0, 2142, 216, 2274))
+            .build()
+        service.rootNodeProvider = { tabNode.unwrap() as AccessibilityNodeInfo }
+
+        val event = AccessibilityEvent.obtain().apply {
+            packageName = UnreelAccessibilityService.TARGET_INSTAGRAM_PACKAGE
+            eventType = AccessibilityEvent.TYPE_VIEW_CLICKED
+        }
+
+        assertFalse("Bottom nav bar clicks must not be treated as navigational subscreen exits", service.isNavigationalClick(event))
+    }
+
+    @Test
+    fun testNavigationalClickOnNoteOrAvatarDetachesOverlayPreemptively() {
+        val noteNode = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/avatar_image_view")
+            .setContentDescription("User note")
+            .setBounds(android.graphics.Rect(400, 500, 600, 700))
+            .build()
+        service.rootNodeProvider = { noteNode.unwrap() as AccessibilityNodeInfo }
+
+        val event = AccessibilityEvent.obtain().apply {
+            packageName = UnreelAccessibilityService.TARGET_INSTAGRAM_PACKAGE
+            eventType = AccessibilityEvent.TYPE_VIEW_CLICKED
+        }
+
+        assertTrue("Clicks on notes/avatars outside bottom bar must trigger pre-emptive detachment", service.isNavigationalClick(event))
+    }
+
+    @Test
+    fun testInFeedMicroActionDoesNotTriggerPreemptiveDetachment() {
+        val likeButton = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/row_feed_button_like")
+            .setContentDescription("Like")
+            .setBounds(android.graphics.Rect(50, 1200, 150, 1300))
+            .build()
+        service.rootNodeProvider = { likeButton.unwrap() as AccessibilityNodeInfo }
+
+        val event = AccessibilityEvent.obtain().apply {
+            packageName = UnreelAccessibilityService.TARGET_INSTAGRAM_PACKAGE
+            eventType = AccessibilityEvent.TYPE_VIEW_CLICKED
+        }
+
+        assertFalse("In-feed micro actions (like, save, mute) must NOT trigger pre-emptive detachment", service.isNavigationalClick(event))
+    }
 }
 

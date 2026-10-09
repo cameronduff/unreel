@@ -100,11 +100,9 @@ class UnreelAccessibilityService : AccessibilityService() {
 
         // 2. Hide overlay when switching away from Instagram to another app
         if (pkg != TARGET_INSTAGRAM_PACKAGE) {
-            if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-                Log.d(TAG, "Navigated away from Instagram to $pkg, hiding overlay")
-                updateOverlay(false)
-                currentForegroundActivity = null
-            }
+            Log.d(TAG, "Foreground package is $pkg (not Instagram), hiding overlay")
+            updateOverlay(false)
+            currentForegroundActivity = null
             return
         }
 
@@ -113,22 +111,28 @@ class UnreelAccessibilityService : AccessibilityService() {
             return
         }
 
-        // Fast-Path 1 & 2: Instant Activity-level event evaluation (0ms Binder IPC overhead)
+        // Fast-Path 1: Instant Activity/Dialog-level detachment (0ms Binder IPC overhead)
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             val className = event.className?.toString() ?: ""
             if (className.isNotEmpty()) {
                 currentForegroundActivity = className
             }
-            // Fast-Path 1: Entering ModalActivity (DMs or modal screens) -> instant detachment (0ms)
-            if (className.contains("ModalActivity")) {
-                Log.d(TAG, "Fast-path: Entered ModalActivity ($className) -> immediate overlay detachment (0ms)")
+            if (className.contains("ModalActivity") ||
+                className.contains("Dialog", ignoreCase = true) ||
+                className.contains("BottomSheet", ignoreCase = true) ||
+                className.contains("ActionSheet", ignoreCase = true)) {
+                Log.d(TAG, "Fast-path: Entered modal/dialog screen ($className) -> immediate overlay detachment (0ms)")
                 updateOverlay(false)
                 return
             }
-            // Fast-Path 2: Returning to MainActivity with known tab bounds -> instant re-attachment (0ms)
-            if (className.contains("InstagramMainActivity") && cachedTabBounds != null) {
-                Log.d(TAG, "Fast-path: Returned to InstagramMainActivity with cached bounds $cachedTabBounds -> immediate re-attachment (0ms)")
-                updateOverlay(true, cachedTabBounds)
+        }
+
+        // Fast-Path 2: Instant Pre-Emptive Detachment on Navigation & Subscreen Clicks (0ms)
+        if (event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED) {
+            if (isNavigationalClick(event)) {
+                Log.d(TAG, "Fast-path 2: Navigational click detected -> immediate overlay detachment (0ms)")
+                updateOverlay(false)
+                return
             }
         }
 
@@ -170,13 +174,6 @@ class UnreelAccessibilityService : AccessibilityService() {
         }
 
         // 4. PRIORITY 1: Bottom Navigation Blackout Touch-Absorber Overlay
-        // If user is inside a direct message conversation, hide overlay immediately
-        if (scan.isDirectThreadActive) {
-            Log.d(TAG, "Direct thread active -> hiding overlay and short-circuiting feed processing")
-            updateOverlay(false)
-            return
-        }
-
         if (scan.isModalOpen || scan.isSplashScreenShowing) {
             Log.d(TAG, "Suppression active: isModalOpen=${scan.isModalOpen}, isSplash=${scan.isSplashScreenShowing} -> hiding overlay")
             updateOverlay(false)
@@ -193,7 +190,7 @@ class UnreelAccessibilityService : AccessibilityService() {
         }
 
         // 5. Auto-snooze suggested posts in feed (every 30 days)
-        if (cachedPreferences.isAutoSnoozeEnabled) {
+        if (cachedPreferences.isAutoSnoozeEnabled && !scan.isDirectThreadActive) {
             val snoozeResult = suggestedPostSnoozer.processHierarchy(rootCompat)
             when (snoozeResult) {
                 is InstagramSuggestedPostSnoozer.ActionResult.SnoozeCompleted -> {
@@ -223,7 +220,7 @@ class UnreelAccessibilityService : AccessibilityService() {
         }
 
         // 6. Instagram AdShield: In-Feed Sponsored Post Auto-Hider
-        if (cachedPreferences.isFeedAdShieldEnabled) {
+        if (cachedPreferences.isFeedAdShieldEnabled && !scan.isDirectThreadActive) {
             val adResult = feedAdShield.processHierarchy(rootCompat)
             when (adResult) {
                 is InstagramFeedAdShield.ActionResult.AdHidden -> {
@@ -246,7 +243,7 @@ class UnreelAccessibilityService : AccessibilityService() {
         }
 
         // 7. Instagram AdShield: Story Ads Auto-Fast-Forward
-        if (cachedPreferences.isStoryAdShieldEnabled) {
+        if (cachedPreferences.isStoryAdShieldEnabled && !scan.isDirectThreadActive) {
             val storyResult = storyAdDetector.detectAndSkipAd(rootCompat)
             when (storyResult) {
                 is InstagramStoryAdDetector.ActionResult.SkipAd -> {
@@ -264,6 +261,51 @@ class UnreelAccessibilityService : AccessibilityService() {
                 }
             }
         }
+    }
+
+    private fun isMicroFeedInteraction(viewId: String, desc: String): Boolean {
+        val id = viewId.lowercase()
+        val d = desc.lowercase()
+        return id.contains("like") || d.contains("like") ||
+               id.contains("save") || d.contains("save") ||
+               id.contains("audio") || id.contains("sound") || d.contains("mute")
+    }
+
+    internal fun isNavigationalClick(event: AccessibilityEvent): Boolean {
+        if (event.eventType != AccessibilityEvent.TYPE_VIEW_CLICKED) return false
+
+        val source = event.source ?: resolveRootInActiveWindow() ?: return false
+        val node = AccessibilityNodeInfoCompat.wrap(source)
+
+        val clickBounds = android.graphics.Rect()
+        node.getBoundsInScreen(clickBounds)
+
+        val viewId = node.viewIdResourceName ?: ""
+        val desc = (node.contentDescription ?: event.contentDescription)?.toString() ?: ""
+
+        // 1. Bottom navigation bar tabs - ignore so tab switching maintains bottom bar state
+        if (viewId.contains("feed_tab", ignoreCase = true) ||
+            viewId.contains("clips_tab", ignoreCase = true) ||
+            viewId.contains("direct_tab", ignoreCase = true) ||
+            viewId.contains("search_tab", ignoreCase = true) ||
+            viewId.contains("profile_tab", ignoreCase = true) ||
+            viewId.contains("tab_bar", ignoreCase = true) ||
+            viewId.contains("tab_icon", ignoreCase = true)) {
+            return false
+        }
+
+        val tabTop = cachedTabBounds?.top ?: 2100
+        if (clickBounds.top >= (tabTop - 30) && clickBounds.height() > 0) {
+            return false
+        }
+
+        // 2. In-feed micro actions that stay on the feed
+        if (isMicroFeedInteraction(viewId, desc)) {
+            return false
+        }
+
+        // Any other click outside bottom bar is navigating or opening a subscreen/dialog/sheet
+        return true
     }
 
     internal fun dispatchTapGesture(x: Float, y: Float): Boolean {

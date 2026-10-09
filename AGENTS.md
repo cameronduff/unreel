@@ -432,3 +432,40 @@ Every ticket created in the database MUST contain:
 
 - **[2026-10-09 09:13:11] Discovery / Engineering Note**:
   - Resolved ~1s overlay latency on Instagram launch and direct message transitions ([UNR-31]). Root cause: 6 uncoordinated hierarchy traversals causing ~500 binder IPC roundtrips while Instagram main thread is inflating UI. Implemented 0ms event fast-paths for ModalActivity (instant detachment) and cached tab bounds restoration (instant re-attachment), plus single-pass InstagramHierarchyScanner. Live Pixel 4a verification with 'elisha zara kunalan duff' proved 1ms overlay detachment and 11ms re-attachment. All 156 unit tests passing.
+
+- **[2026-10-09 09:00:25] Discovery / Engineering Note**:
+  - Configured native Ubuntu environment: installed android-sdk-platform-tools-common udev rules, official Google Android platform-tools v37.0.1, OpenJDK 17, and updated runner scripts with portable PATH discovery.
+
+- **[2026-10-09 09:12:34] Discovery / Engineering Note**:
+  - Authorized Pixel 4a (08241JEC213735) on host 'cdhomeserver'. ADB handshake verified in device mode.
+
+- **[2026-10-09 09:39:43] Discovery / Engineering Note**:
+  - Completed [UNR-32]: Resolved blind overlay re-attachment in Fast-Path 2 by gating on wasInModal state, and added instant 0ms detachment for Dialog/BottomSheet/ActionSheet screens. Unit tests verified.
+
+- **[2026-10-09 09:44:22] Discovery / Engineering Note**:
+  - Completed [UNR-33]: Implemented bottom-up target-directed BFS queueing in InstagramHierarchyScanner, short-circuiting on tab_bar resolution (visited <= 10 nodes) and non-feed subscreen indicators (action_bar_button_back, direct_inbox, ComposeView). Lowered traversal ceiling to 45 nodes. Unit tests verified.
+
+- **[2026-10-09 09:49:34] Discovery / Engineering Note**:
+  - Completed [UNR-34]: Guarded secondary scanning engines (InstagramSuggestedPostSnoozer, InstagramFeedAdShield, InstagramStoryAdDetector) with !scan.isDirectThreadActive, completely bypassing ~180 Binder IPC calls per event when the user is in non-feed subscreens (Settings, DMs). Unit tests verified.
+
+- **[2026-10-09 09:52:22] Discovery / Engineering Note**:
+  - Implemented [UNR-35]: Set overlayView.visibility = View.GONE immediately in detachOverlay() to eliminate any SurfaceFlinger/WindowManager view teardown lag, and restored View.VISIBLE on attachOverlay. Verified with TouchAbsorberOverlayServiceTest.
+
+- **[2026-10-09 10:09:35] Discovery / Engineering Note**:
+  - Implemented [UNR-36]: Verified real-device transition latency benchmark suite (scripts/test_screen_transition_latency.py). Confirmed 0ms fast-path detachment, clean SurfaceFlinger teardown, touch sink absorption, and seamless re-attachment when navigating between feed and home-bar-free screens (DMs, Settings, Modals).
+
+- **[2026-10-09 10:58:30] Discovery / Engineering Note**:
+  - Implemented [UNR-37] (Ignore Dormant / Invisible Hierarchy Nodes in Subscreen & Direct Thread Detection):
+    1. Identified critical bug causing permanent overlay suppression on Home Feed after returning from Direct Messages or Settings: Instagram's single-activity architecture retains previously visited subscreen fragments (`thread_fragment_container`, `direct_thread`, `header_left_button` with content-desc="Back") in the window view hierarchy tree in memory with `isVisibleToUser = false`.
+    2. Guarded all subscreen indicators (`isBackButton`, `directViewId`, `ComposeView`), modal detection (`isModal`), and splash detection (`isSplash`) with `current.isVisibleToUser` in `InstagramHierarchyScanner.kt`.
+    3. Added Robolectric unit tests in `InstagramHierarchyScannerTest.kt` (`testDormantDirectThreadNodesIgnoredWhenNotVisibleToUser` and `testDormantModalNodesIgnoredWhenNotVisibleToUser`).
+    4. Verified on physical Google Pixel 4a: Home Feed cleanly retains overlay at `Rect(216, 2142 - 432, 2274)`, transitioning into Direct thread or Profile Options modal detaches immediately (< 100ms, 0.00ms sync dispatch), and returning to Home Feed re-attaches cleanly within 13ms. Automated real-device benchmark (`test_screen_transition_latency.py`) and full E2E test suite (`run_e2e_device_test.sh`) pass with 100% success.
+
+- **[2026-10-09 13:12:00] Discovery / Engineering Note**:
+  - Implemented [UNR-38] (Instant Pre-Emptive Overlay Detachment on Navigation & Screen Transitions):
+    1. Root Cause Analysis: Frame-by-frame screen recording inspection proved that during fragment slide transitions into sub-pages (e.g. tapping Direct chat threads, Settings, comments), Android accessibility event dispatch is throttled during the 200–350ms window transition animation, causing the blackout overlay to linger over text fields and composer bars. Furthermore, `notificationTimeout="10"` added a 10ms IPC queueing lag, off-screen ViewPager nodes were matching Back buttons, and modern Instagram's adoption of `ComposeView` on the Home Feed was causing false-positive subscreen matches.
+    2. Zero-Lag Fast-Path 2 (`TYPE_VIEW_CLICKED`): Engineered pre-emptive overlay detachment immediately when receiving `TYPE_VIEW_CLICKED` outside the bottom navigation bar (`clickBounds.top < tabTop - 30`). Micro-interactions that stay on the feed (`like`, `save`, `mute/sound`) are preserved to prevent flicker, while clicks on conversation rows, avatars, notes, headers, search, and navigation buttons instantly detach the overlay in 0ms before fragment slide animations start.
+    3. Accessibility Config Optimization: Set `android:notificationTimeout="0"` in `accessibility_service_config.xml`, eliminating IPC queue buffering delays.
+    4. Off-Screen & Compose Hierarchy Fixes: Added `isVisibleOnScreen` bounds checks in `InstagramHierarchyScanner.kt` to reject off-screen fragment nodes, removed eager `isSubscreenOrComposer` short-circuiting on generic `ComposeView`, and ensured `reelsTabBounds` governs overlay attachment on both Home Feed and Messages inbox tabs.
+    5. Physical Device Verification: Confirmed on Google Pixel 4a with frame capture (`thread_100ms.png`, `thread_600ms.png`, `settings_tap.png`) that navigating into Direct message threads, Settings, and Google Play modals has 0ms lingering box delay (text composer is completely clear from frame 1). All 176 unit tests pass cleanly in `./gradlew testDebugUnitTest`.
+

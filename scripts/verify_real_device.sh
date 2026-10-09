@@ -7,7 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd -P)"
 
-export PATH="/home/cameron/.local/bin:/home/cameron/.local/android-sdk/platform-tools:$PATH"
+export PATH="${HOME}/.local/bin:${HOME}/.local/android-sdk/platform-tools:/usr/local/bin:$PATH"
 
 APK_PATH="${REPO_ROOT}/app/build/outputs/apk/debug/app-debug.apk"
 PACKAGE_NAME="org.unreel.android"

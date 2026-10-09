@@ -53,6 +53,7 @@ class TouchAbsorberOverlayService : Service() {
         android.util.Log.i("TouchAbsorber", "attachOverlay requested: targetRect=$targetRect, calculated=$rect, isAttached=$isOverlayAttached")
 
         if (isOverlayAttached && overlayView != null) {
+            overlayView?.visibility = View.VISIBLE
             if (currentBounds == rect) {
                 return true
             }
@@ -132,6 +133,7 @@ class TouchAbsorberOverlayService : Service() {
         android.util.Log.i("TouchAbsorber", "detachOverlay called: isAttached=$isOverlayAttached")
         if (isOverlayAttached && overlayView != null) {
             try {
+                overlayView?.visibility = View.GONE
                 windowManager.removeView(overlayView)
                 android.util.Log.i("TouchAbsorber", "Overlay view removed from WindowManager")
             } catch (e: Exception) {
@@ -175,6 +177,14 @@ class TouchAbsorberOverlayService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun dump(fd: java.io.FileDescriptor?, writer: java.io.PrintWriter?, args: Array<out String>?) {
+        super.dump(fd, writer, args)
+        writer?.println("TouchAbsorberOverlayService Status:")
+        writer?.println("  isOverlayAttached=$isOverlayAttached")
+        writer?.println("  currentBounds=$currentBounds")
+        writer?.println("  overlayViewVisibility=${overlayView?.visibility}")
+    }
 
     companion object {
         const val ACTION_ATTACH = "org.unreel.android.overlay.ATTACH"

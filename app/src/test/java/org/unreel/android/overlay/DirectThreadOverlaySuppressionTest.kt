@@ -321,14 +321,55 @@ class DirectThreadOverlaySuppressionTest {
         service.onAccessibilityEvent(modalEvent)
         assertFalse(lastOverlayState ?: true)
 
-        // Return to MainActivity
+        // Return to MainActivity with feed root present
+        service.rootNodeProvider = { feedRoot }
         val returnEvent = AccessibilityEvent.obtain().apply {
             packageName = UnreelAccessibilityService.TARGET_INSTAGRAM_PACKAGE
             eventType = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
             className = "com.instagram.mainactivity.InstagramMainActivity"
         }
         service.onAccessibilityEvent(returnEvent)
-        assertTrue("Overlay must immediately re-attach when returning to InstagramMainActivity", lastOverlayState == true)
+        assertTrue("Overlay must re-attach when returning to InstagramMainActivity with feed root", lastOverlayState == true)
         assertEquals(expectedBounds, lastBounds)
+    }
+
+    @Test
+    fun testBottomSheetWindowStateChangeDetachesOverlayImmediately() {
+        val feedRoot = buildMainFeedWithTabBar()
+        service.rootNodeProvider = { feedRoot }
+        val feedEvent = AccessibilityEvent.obtain().apply {
+            packageName = UnreelAccessibilityService.TARGET_INSTAGRAM_PACKAGE
+            eventType = AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+        }
+        service.onAccessibilityEvent(feedEvent)
+        assertTrue(lastOverlayState == true)
+
+        val bottomSheetEvent = AccessibilityEvent.obtain().apply {
+            packageName = UnreelAccessibilityService.TARGET_INSTAGRAM_PACKAGE
+            eventType = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+            className = "com.instagram.igds.components.bottomsheet.BottomSheet"
+        }
+        service.onAccessibilityEvent(bottomSheetEvent)
+        assertFalse("Overlay must be detached on BottomSheet window state change", lastOverlayState ?: true)
+    }
+
+    @Test
+    fun testGenericMainActivityWindowStateChangeDoesNotBlindlyReattachOverlay() {
+        // Overlay is currently detached (e.g. while in non-feed subscreen)
+        lastOverlayState = false
+        service.cachedTabBounds = Rect(216, 2142, 432, 2274)
+        service.currentForegroundActivity = "com.instagram.mainactivity.InstagramMainActivity"
+
+        // Null root simulating non-feed subscreen transition
+        service.rootNodeProvider = { null }
+
+        val genericEvent = AccessibilityEvent.obtain().apply {
+            packageName = UnreelAccessibilityService.TARGET_INSTAGRAM_PACKAGE
+            eventType = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+            className = "com.instagram.mainactivity.InstagramMainActivity"
+        }
+        service.onAccessibilityEvent(genericEvent)
+
+        assertFalse("Generic MainActivity event must NOT blindly re-attach overlay unless returning from modal", lastOverlayState ?: true)
     }
 }
