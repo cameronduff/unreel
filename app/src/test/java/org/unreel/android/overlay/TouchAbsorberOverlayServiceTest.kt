@@ -159,45 +159,24 @@ class TouchAbsorberOverlayServiceTest {
     }
 
     @Test
-    fun testAttachOverlaySetsFlagWatchOutsideTouch() {
+    fun testAttachOverlayDoesNotSetFlagWatchOutsideTouch() {
         service.canDrawOverlaysCheck = { true }
         service.attachOverlay(Rect(216, 2142, 432, 2274))
         val params = service.overlayView!!.layoutParams as WindowManager.LayoutParams
-        assertTrue(
-            "FLAG_WATCH_OUTSIDE_TOUCH must be enabled",
-            (params.flags and WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH) != 0
+        assertEquals(
+            "FLAG_WATCH_OUTSIDE_TOUCH must NOT be set to prevent carousel gesture interference",
+            0,
+            params.flags and WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
         )
     }
 
     @Test
-    fun testHandleOutsideTouchInContentAreaPreemptivelyHidesOverlay() {
+    fun testOverlayMaintainsStabilityAcrossFeedInteractions() {
         service.canDrawOverlaysCheck = { true }
-        var callbackInvoked = false
-        service.onOutsideContentTouch = { callbackInvoked = true }
         service.attachOverlay(Rect(216, 2142, 432, 2274))
 
-        val now = SystemClock.uptimeMillis()
-        val outsideEvent = MotionEvent.obtain(now, now, MotionEvent.ACTION_OUTSIDE, 400f, -500f, 0)
-        service.handleOutsideTouch(outsideEvent)
-        outsideEvent.recycle()
-
-        assertTrue("Callback must be called on content touch", callbackInvoked)
-        assertEquals("Overlay must be GONE immediately", View.GONE, service.overlayView?.visibility)
-    }
-
-    @Test
-    fun testHandleOutsideTouchInBottomBarMaintainsOverlay() {
-        service.canDrawOverlaysCheck = { true }
-        var callbackInvoked = false
-        service.onOutsideContentTouch = { callbackInvoked = true }
-        service.attachOverlay(Rect(216, 2142, 432, 2274))
-
-        val now = SystemClock.uptimeMillis()
-        val bottomBarEvent = MotionEvent.obtain(now, now, MotionEvent.ACTION_OUTSIDE, 100f, 2200f, 0)
-        service.handleOutsideTouch(bottomBarEvent)
-        bottomBarEvent.recycle()
-
-        assertFalse("Callback should not be called for bottom bar tab touches", callbackInvoked)
-        assertEquals("Overlay must remain VISIBLE for bottom bar tab touches", View.VISIBLE, service.overlayView?.visibility)
+        assertTrue("Overlay must be attached", service.isOverlayAttached)
+        assertEquals("Overlay must be VISIBLE", View.VISIBLE, service.overlayView?.visibility)
+        assertEquals("Alpha must be 1f", 1f, (service.overlayView?.layoutParams as WindowManager.LayoutParams).alpha)
     }
 }

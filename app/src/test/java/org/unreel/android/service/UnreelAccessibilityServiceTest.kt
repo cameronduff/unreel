@@ -612,5 +612,22 @@ class UnreelAccessibilityServiceTest {
 
         assertFalse("In-feed micro actions (like, save, mute) must NOT trigger pre-emptive detachment", service.isNavigationalClick(event))
     }
+
+    @Test
+    fun testFeedCarouselOrMediaClickDoesNotTriggerPreemptiveDetachment() {
+        val carouselNode = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/row_feed_view_pager")
+            .setContentDescription("Photo 1 of 5")
+            .setBounds(android.graphics.Rect(0, 300, 1080, 1380))
+            .build()
+        service.rootNodeProvider = { carouselNode.unwrap() as AccessibilityNodeInfo }
+
+        val event = AccessibilityEvent.obtain().apply {
+            packageName = UnreelAccessibilityService.TARGET_INSTAGRAM_PACKAGE
+            eventType = AccessibilityEvent.TYPE_VIEW_CLICKED
+        }
+
+        assertFalse("Carousel and photo interactions must NOT trigger pre-emptive detachment", service.isNavigationalClick(event))
+    }
 }
 

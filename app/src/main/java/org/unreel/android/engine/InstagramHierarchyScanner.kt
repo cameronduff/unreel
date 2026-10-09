@@ -252,6 +252,11 @@ object InstagramHierarchyScanner {
         node.getBoundsInScreen(rect)
 
         val inBottomZone = rootBounds.height() == 0 || rect.bottom >= minBottomY
+        val isSettledHorizontally = rootBounds.width() == 0 || (rect.left in -15..15 && (rootBounds.right == 0 || rect.right >= (rootBounds.right - 15)))
+
+        if (!isSettledHorizontally) {
+            return false
+        }
 
         if (isNavBarId && inBottomZone && node.childCount >= 1) {
             return true

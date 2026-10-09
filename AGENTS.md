@@ -488,4 +488,24 @@ Every ticket created in the database MUST contain:
        - 179 unit tests passing (`./gradlew testDebugUnitTest`).
        - Physical Google Pixel 4a high-speed 20fps screen recording verification: Frame-by-frame analysis (`zdc_016.png` tap -> `zdc_017.png` +50ms -> `zdc_025.png` +450ms) proves the overlay is already 100% invisible on Frame 0 with 0ms lingering over text composers or settings menus.
 
+- **[2026-10-09 14:40:00] Discovery / Engineering Note**:
+  - Implemented [UNR-40] (Persistent Zero-Jitter Overlay Stability & Accurate Subscreen Navigation Gating):
+    1. Root Cause Analysis:
+       - In [UNR-39], `FLAG_WATCH_OUTSIDE_TOUCH` was added to catch navigation taps early. However, Android WindowManager dispatches `MotionEvent.ACTION_OUTSIDE` on *every* touch on the screen outside the tiny overlay box with `rawY = 0.0`.
+       - Consequently, every horizontal carousel swipe, vertical feed scroll, or media tap triggered `handleOutsideTouch`, hiding the overlay on touch-down and forcing an immediate WindowManager detachment.
+       - Moments later, accessibility events triggered re-attachment, creating a violent visual flickering loop (box blinking off and on) and heavy WindowManager/SurfaceFlinger layer churn on every gesture.
+       - Furthermore, when returning from subpages via Back navigation, Instagram's fragment slide animation caused `clips_tab` to be caught at mid-animation coordinates (e.g. `x = 138`), making the box jump across the screen after settling.
+    2. Zero-Jitter Architecture:
+       - Eradicated `FLAG_WATCH_OUTSIDE_TOUCH` and all outside-touch overlay suppression from `TouchAbsorberOverlayService`.
+       - Swiping carousels, scrolling feed, and tapping media now perform zero overlay operations, guaranteeing 100% static, rock-solid visibility across all bottom-bar tabs (Feed, Search, Direct Inbox, Profile).
+    3. Selective Navigation Gating:
+       - Refactored `isNavigationalClick` in `UnreelAccessibilityService` to only match explicit subscreen navigation triggers (Options menu button, DM conversation rows, Comments launcher, Back/Close buttons). Defaulted all normal feed clicks to `false`.
+    4. Animation-Safe Settled Detection:
+       - Added `isSettledHorizontally` check in `InstagramHierarchyScanner.isNavBarNode` (`rect.left in -15..15`), rejecting transient sliding animation frames so the overlay never attaches at intermediate coordinates (e.g. `x = 138`).
+    5. Physical Device Verification:
+       - Pixel 4a testing confirmed zero overlay detachments or visibility toggles across repeated carousel swipes and vertical scrolling (logcat completely silent during feed interactions).
+       - Screen recording (`carousel_test.mp4`) frame analysis (`cframe_001.png`, `cframe_005.png`, `cframe_008.png`) confirmed the blackout box sits seamlessly over the Reels tab with zero flicker or logo bleed, appearing truly baked into the app.
+       - Transitioning into DM conversation threads detaches cleanly, and Back navigation re-attaches directly at `Rect(216, 2142, 432, 2274)` with zero position jumping. All 179 unit tests pass.
+
+
 

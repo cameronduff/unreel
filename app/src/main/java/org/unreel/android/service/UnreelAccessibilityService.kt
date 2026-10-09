@@ -71,14 +71,6 @@ class UnreelAccessibilityService : AccessibilityService() {
         super.onServiceConnected()
         Log.i(TAG, "Unreel Accessibility Service connected and ready")
 
-        TouchAbsorberOverlayService.onOutsideContentTouchListener = {
-            Log.d(TAG, "Fast-path input: Outside content touch intercepted by overlay -> immediate detachment (0ms)")
-            updateOverlay(false)
-        }
-        TouchAbsorberOverlayService.watchdogRestoreCheckListener = {
-            currentForegroundActivity?.contains("ModalActivity") != true && cachedTabBounds != null
-        }
-
         val repo = repositoryProvider?.invoke() ?: FilterPreferencesRepository.getInstance(this)
         serviceScope.launch {
             repo.filterPreferences.collect { prefs ->
@@ -289,32 +281,40 @@ class UnreelAccessibilityService : AccessibilityService() {
         val node = AccessibilityNodeInfoCompat.wrap(source)
 
         val desc = (node.contentDescription ?: event.contentDescription)?.toString() ?: ""
+        val viewId = node.viewIdResourceName ?: ""
+        val text = node.text?.toString() ?: ""
 
-        // Immediate navigational match for back or close actions
+        // 1. Navigation Back, Close, or Navigate Up buttons (always detach immediately)
         if (desc.equals("Back", ignoreCase = true) ||
             desc.equals("Close", ignoreCase = true) ||
-            desc.equals("Navigate up", ignoreCase = true)) {
+            desc.equals("Navigate up", ignoreCase = true) ||
+            text.equals("Back", ignoreCase = true) ||
+            text.equals("Close", ignoreCase = true) ||
+            viewId.contains("action_bar_button_back", ignoreCase = true) ||
+            viewId.contains("action_bar_back_button", ignoreCase = true) ||
+            viewId.contains("action_bar_left_button", ignoreCase = true) ||
+            viewId.contains("header_left_button", ignoreCase = true)
+        ) {
             return true
         }
 
         val clickBounds = android.graphics.Rect()
         node.getBoundsInScreen(clickBounds)
 
-        // If fallback node is the entire window root container (>1800px tall), reject to avoid false bounds
+        // Reject full-window root containers to prevent false matches
         if (event.source == null && clickBounds.height() > 1800 && clickBounds.width() > 900) {
             return false
         }
 
-        val viewId = node.viewIdResourceName ?: ""
-
-        // 1. Bottom navigation bar tabs - ignore so tab switching maintains bottom bar state
+        // 2. Bottom navigation bar tabs - maintain bottom bar state across tab switches
         if (viewId.contains("feed_tab", ignoreCase = true) ||
             viewId.contains("clips_tab", ignoreCase = true) ||
             viewId.contains("direct_tab", ignoreCase = true) ||
             viewId.contains("search_tab", ignoreCase = true) ||
             viewId.contains("profile_tab", ignoreCase = true) ||
             viewId.contains("tab_bar", ignoreCase = true) ||
-            viewId.contains("tab_icon", ignoreCase = true)) {
+            viewId.contains("tab_icon", ignoreCase = true)
+        ) {
             return false
         }
 
@@ -323,13 +323,32 @@ class UnreelAccessibilityService : AccessibilityService() {
             return false
         }
 
-        // 2. In-feed micro actions that stay on the feed
-        if (isMicroFeedInteraction(viewId, desc)) {
-            return false
+        // 3. Explicit Subscreen / Options Navigation Triggers
+        val isOptionsClick = desc.equals("Options", ignoreCase = true) ||
+            viewId.contains("action_bar_button_options", ignoreCase = true) ||
+            viewId.contains("options_button", ignoreCase = true) ||
+            viewId.contains("menu_button", ignoreCase = true) ||
+            viewId.contains("action_bar_overflow_icon", ignoreCase = true)
+
+        val isCommentClick = desc.contains("Comment", ignoreCase = true) ||
+            viewId.contains("action_bar_button_comment", ignoreCase = true) ||
+            viewId.contains("button_comment", ignoreCase = true) ||
+            viewId.contains("row_feed_button_comment", ignoreCase = true)
+
+        val isDirectChatClick = viewId.contains("row_inbox", ignoreCase = true) ||
+            viewId.contains("thread", ignoreCase = true) ||
+            viewId.contains("inbox", ignoreCase = true) ||
+            viewId.contains("pog_root_view", ignoreCase = true) ||
+            viewId.contains("avatar", ignoreCase = true)
+
+        val isHeaderDirectClick = desc.equals("Message", ignoreCase = true) && clickBounds.top < 400
+
+        if (isOptionsClick || isCommentClick || isDirectChatClick || isHeaderDirectClick) {
+            return true
         }
 
-        // Any other click outside bottom bar is navigating or opening a subscreen/dialog/sheet
-        return true
+        // Standard feed interactions (photos, carousels, captions, likes, bookmarks) never detach overlay
+        return false
     }
 
     internal fun dispatchTapGesture(x: Float, y: Float): Boolean {

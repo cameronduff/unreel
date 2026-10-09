@@ -29,54 +29,6 @@ class TouchAbsorberOverlayService : Service() {
     internal val windowManager: WindowManager
         get() = windowManagerOverride ?: (getSystemService(Context.WINDOW_SERVICE) as WindowManager)
 
-    internal var onOutsideContentTouch: (() -> Unit)? = null
-    internal var watchdogRestoreCheck: (() -> Boolean)? = null
-    private val watchdogHandler = android.os.Handler(android.os.Looper.getMainLooper())
-    private val watchdogRestoreRunnable = Runnable {
-        if (isOverlayAttached && overlayView != null && overlayView?.visibility == View.GONE) {
-            val shouldRestore = (watchdogRestoreCheck?.invoke() ?: watchdogRestoreCheckListener?.invoke()) ?: true
-            if (shouldRestore) {
-                android.util.Log.i("TouchAbsorber", "Watchdog: Restoring overlay visibility after idle touch")
-                overlayView?.visibility = View.VISIBLE
-            }
-        }
-    }
-
-    internal fun handleOutsideTouch(event: MotionEvent) {
-        val bounds = currentBounds ?: return
-        val tabTop = bounds.top
-
-        // Detect if touch occurred in content area above the bottom navigation bar
-        val isContentTouch = if (event.rawY > 0) {
-            event.rawY < (tabTop - 30)
-        } else {
-            event.y < -30
-        }
-
-        if (isContentTouch) {
-            android.util.Log.i("TouchAbsorber", "Content area touch detected (rawY=${event.rawY}, y=${event.y}, tabTop=$tabTop) -> PRE-EMPTIVELY HIDING OVERLAY (0ms)")
-            val view = overlayView
-            if (view != null) {
-                view.setBackgroundColor(Color.TRANSPARENT)
-                val params = view.layoutParams as? WindowManager.LayoutParams
-                if (params != null) {
-                    params.alpha = 0f
-                    try {
-                        windowManager.updateViewLayout(view, params)
-                    } catch (_: Exception) {}
-                }
-                view.visibility = View.GONE
-            }
-            onOutsideContentTouch?.invoke()
-            onOutsideContentTouchListener?.invoke()
-
-            watchdogHandler.removeCallbacks(watchdogRestoreRunnable)
-            watchdogHandler.postDelayed(watchdogRestoreRunnable, 400L)
-        } else {
-            android.util.Log.d("TouchAbsorber", "Bottom navigation touch detected (rawY=${event.rawY}, y=${event.y}, tabTop=$tabTop) -> maintaining overlay")
-        }
-    }
-
     private fun canDrawOverlays(): Boolean {
         return canDrawOverlaysCheck?.invoke() ?: Settings.canDrawOverlays(this)
     }
@@ -142,8 +94,7 @@ class TouchAbsorberOverlayService : Service() {
             layoutType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
@@ -165,10 +116,6 @@ class TouchAbsorberOverlayService : Service() {
                         android.util.Log.w("TouchAbsorber", "Absorbed touch on Reels tab position!")
                         onTouchAbsorbed?.invoke()
                         true
-                    }
-                    MotionEvent.ACTION_OUTSIDE -> {
-                        handleOutsideTouch(event)
-                        false
                     }
                     else -> true
                 }
@@ -196,7 +143,6 @@ class TouchAbsorberOverlayService : Service() {
 
     fun detachOverlay() {
         android.util.Log.i("TouchAbsorber", "detachOverlay called: isAttached=$isOverlayAttached")
-        watchdogHandler.removeCallbacks(watchdogRestoreRunnable)
         val view = overlayView
         overlayView = null
         currentBounds = null
@@ -272,12 +218,6 @@ class TouchAbsorberOverlayService : Service() {
 
         @Volatile
         internal var instance: TouchAbsorberOverlayService? = null
-
-        @Volatile
-        internal var onOutsideContentTouchListener: (() -> Unit)? = null
-
-        @Volatile
-        internal var watchdogRestoreCheckListener: (() -> Boolean)? = null
 
         fun show(context: Context, bounds: Rect? = null) {
             if (bounds == null) {
