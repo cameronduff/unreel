@@ -265,4 +265,70 @@ class DirectThreadOverlaySuppressionTest {
         assertNull(InstagramBottomNavDetector.findBottomNavBarContainer(root))
         assertNull(InstagramBottomNavDetector.findBottomNavBarContainer(null))
     }
+
+    @Test
+    fun testModalActivityStateChangeDetachesOverlayInstantlyWithoutHierarchyInspection() {
+        // Pre-populate cached bounds and attach overlay
+        val feedRoot = buildMainFeedWithTabBar()
+        service.rootNodeProvider = { feedRoot }
+        val feedEvent = AccessibilityEvent.obtain().apply {
+            packageName = UnreelAccessibilityService.TARGET_INSTAGRAM_PACKAGE
+            eventType = AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+        }
+        service.onAccessibilityEvent(feedEvent)
+        assertTrue(lastOverlayState == true)
+
+        var rootAccessed = false
+        service.rootNodeProvider = {
+            rootAccessed = true
+            feedRoot
+        }
+
+        val modalEvent = AccessibilityEvent.obtain().apply {
+            packageName = UnreelAccessibilityService.TARGET_INSTAGRAM_PACKAGE
+            eventType = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+            className = "com.instagram.modal.ModalActivity"
+        }
+
+        val startNs = System.nanoTime()
+        service.onAccessibilityEvent(modalEvent)
+        val elapsedMs = (System.nanoTime() - startNs) / 1_000_000.0
+
+        assertFalse("Overlay must be detached on ModalActivity window state change", lastOverlayState ?: true)
+        assertFalse("Fast-path 1 must NOT inspect root hierarchy", rootAccessed)
+        assertTrue("Fast-path detachment must complete in < 2ms (was $elapsedMs ms)", elapsedMs < 2.0)
+    }
+
+    @Test
+    fun testReturningToMainActivityWithCachedBoundsAttachesOverlayInstantly() {
+        // Cache bounds first
+        val feedRoot = buildMainFeedWithTabBar()
+        service.rootNodeProvider = { feedRoot }
+        val feedEvent = AccessibilityEvent.obtain().apply {
+            packageName = UnreelAccessibilityService.TARGET_INSTAGRAM_PACKAGE
+            eventType = AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+        }
+        service.onAccessibilityEvent(feedEvent)
+        val expectedBounds = Rect(216, 2142, 432, 2274)
+        assertEquals(expectedBounds, service.cachedTabBounds)
+
+        // Detach on ModalActivity
+        val modalEvent = AccessibilityEvent.obtain().apply {
+            packageName = UnreelAccessibilityService.TARGET_INSTAGRAM_PACKAGE
+            eventType = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+            className = "com.instagram.modal.ModalActivity"
+        }
+        service.onAccessibilityEvent(modalEvent)
+        assertFalse(lastOverlayState ?: true)
+
+        // Return to MainActivity
+        val returnEvent = AccessibilityEvent.obtain().apply {
+            packageName = UnreelAccessibilityService.TARGET_INSTAGRAM_PACKAGE
+            eventType = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+            className = "com.instagram.mainactivity.InstagramMainActivity"
+        }
+        service.onAccessibilityEvent(returnEvent)
+        assertTrue("Overlay must immediately re-attach when returning to InstagramMainActivity", lastOverlayState == true)
+        assertEquals(expectedBounds, lastBounds)
+    }
 }

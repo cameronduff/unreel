@@ -47,56 +47,67 @@ object InstagramClipsDetector {
             val current = queue.poll() ?: continue
             visitedCount++
 
-            // 1. Direct view ID match or pattern match
-            val viewId = current.viewIdResourceName
-            if (viewId != null) {
-                if (TARGET_VIEW_IDS.contains(viewId) ||
-                    viewId.contains("clips_viewer") ||
-                    viewId.contains("reels_viewer")
-                ) {
-                    val rect = android.graphics.Rect()
-                    current.getBoundsInScreen(rect)
-                    // If root bounds available, ensure the container is actually visible to the user
-                    // and spans fullscreen height (>50%) to prevent invisible 0-height stubs or inline cards
-                    if (rootBounds.height() == 0 || (current.isVisibleToUser && rect.height() >= (rootBounds.height() * 0.5))) {
-                        android.util.Log.w("UnreelClipsDetector", "Matched TARGET_VIEW_ID: '$viewId', bounds=$rect, visible=${current.isVisibleToUser}")
-                        return true
-                    }
-                }
-            }
-
-            // 2. Class name heuristic match (e.g. ClipsViewerFragment container)
-            val className = current.className?.toString()
-            if (className != null && (className.contains("ClipsViewer", ignoreCase = true) || className.contains("ReelsViewer", ignoreCase = true))) {
-                android.util.Log.w("UnreelClipsDetector", "Matched className: '$className'")
+            if (isNodeClips(current, rootBounds)) {
                 return true
-            }
-
-            // 3. Top header title match (fullscreen viewer "Reels" header title)
-            val text = current.text?.toString()
-            if (text.equals("Reels", ignoreCase = true) || text.equals("Clips", ignoreCase = true)) {
-                val rect = android.graphics.Rect()
-                current.getBoundsInScreen(rect)
-                if (rect.top in 1..400) {
-                    android.util.Log.w("UnreelClipsDetector", "Matched top header title: '$text', bounds=$rect")
-                    return true
-                }
-            }
-
-            // 4. Content description heuristic for full screen video clips
-            val desc = current.contentDescription?.toString()
-            if (desc != null && REELS_DESC_PATTERN.matcher(desc).find()) {
-                val rect = android.graphics.Rect()
-                current.getBoundsInScreen(rect)
-                if (rootBounds.height() == 0 || rect.height() >= (rootBounds.height() * 0.7)) {
-                    android.util.Log.w("UnreelClipsDetector", "Matched desc: '$desc', bounds=$rect")
-                    return true
-                }
             }
 
             val childCount = current.childCount
             for (i in 0 until childCount) {
                 current.getChild(i)?.let { queue.add(it) }
+            }
+        }
+
+        return false
+    }
+
+    /**
+     * Checks if a single node matches fullscreen Reels / Clips criteria.
+     */
+    fun isNodeClips(node: AccessibilityNodeInfoCompat, rootBounds: android.graphics.Rect): Boolean {
+        // 1. Direct view ID match or pattern match
+        val viewId = node.viewIdResourceName
+        if (viewId != null) {
+            if (TARGET_VIEW_IDS.contains(viewId) ||
+                viewId.contains("clips_viewer") ||
+                viewId.contains("reels_viewer")
+            ) {
+                val rect = android.graphics.Rect()
+                node.getBoundsInScreen(rect)
+                // If root bounds available, ensure the container is actually visible to the user
+                // and spans fullscreen height (>50%) to prevent invisible 0-height stubs or inline cards
+                if (rootBounds.height() == 0 || (node.isVisibleToUser && rect.height() >= (rootBounds.height() * 0.5))) {
+                    android.util.Log.w("UnreelClipsDetector", "Matched TARGET_VIEW_ID: '$viewId', bounds=$rect, visible=${node.isVisibleToUser}")
+                    return true
+                }
+            }
+        }
+
+        // 2. Class name heuristic match (e.g. ClipsViewerFragment container)
+        val className = node.className?.toString()
+        if (className != null && (className.contains("ClipsViewer", ignoreCase = true) || className.contains("ReelsViewer", ignoreCase = true))) {
+            android.util.Log.w("UnreelClipsDetector", "Matched className: '$className'")
+            return true
+        }
+
+        // 3. Top header title match (fullscreen viewer "Reels" header title)
+        val text = node.text?.toString()
+        if (text.equals("Reels", ignoreCase = true) || text.equals("Clips", ignoreCase = true)) {
+            val rect = android.graphics.Rect()
+            node.getBoundsInScreen(rect)
+            if (rect.top in 1..400) {
+                android.util.Log.w("UnreelClipsDetector", "Matched top header title: '$text', bounds=$rect")
+                return true
+            }
+        }
+
+        // 4. Content description heuristic for full screen video clips
+        val desc = node.contentDescription?.toString()
+        if (desc != null && REELS_DESC_PATTERN.matcher(desc).find()) {
+            val rect = android.graphics.Rect()
+            node.getBoundsInScreen(rect)
+            if (rootBounds.height() == 0 || rect.height() >= (rootBounds.height() * 0.7)) {
+                android.util.Log.w("UnreelClipsDetector", "Matched desc: '$desc', bounds=$rect")
+                return true
             }
         }
 

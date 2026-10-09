@@ -65,3 +65,4 @@ By reading the accessibility node hierarchy locally on-device:
 | **[UNR-28]** | Overlay Precision & DM Chat Suppression Engine Fix | `Done` | P0 - Blocker | Overlay |
 | **[UNR-29]** | Adaptive AMOLED & Monochromatic Launcher App Icon | `Done` | P1 - High | UI / Dashboard |
 | **[UNR-30]** | Adversarial Overlay Flashing & Direct Thread Validation Test Suite | `Done` | P1 - High | Overlay |
+| **[UNR-31]** | Zero-Latency Overlay Engine: Event Fast-Path & Single-Pass Hierarchy Scanner | `Done` | P0 - Blocker | Overlay |

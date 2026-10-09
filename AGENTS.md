@@ -429,3 +429,6 @@ Every ticket created in the database MUST contain:
   2. All 146 unit tests passing (100% pass rate).
 - Real Device Testing Directive:
   Always use 'elisha zara kunalan duff' (clickable bounds [0, 989]-[1080, 1198]) as the target live test conversation thread on device. Verified overlay is cleanly suppressed in chat and immediately attaches upon returning to inbox.
+
+- **[2026-10-09 09:13:11] Discovery / Engineering Note**:
+  - Resolved ~1s overlay latency on Instagram launch and direct message transitions ([UNR-31]). Root cause: 6 uncoordinated hierarchy traversals causing ~500 binder IPC roundtrips while Instagram main thread is inflating UI. Implemented 0ms event fast-paths for ModalActivity (instant detachment) and cached tab bounds restoration (instant re-attachment), plus single-pass InstagramHierarchyScanner. Live Pixel 4a verification with 'elisha zara kunalan duff' proved 1ms overlay detachment and 11ms re-attachment. All 156 unit tests passing.

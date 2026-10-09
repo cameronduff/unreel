@@ -19,12 +19,16 @@ import org.unreel.android.engine.DebouncedBackDispatcher
 import org.unreel.android.engine.InstagramBottomNavDetector
 import org.unreel.android.engine.InstagramClipsDetector
 import org.unreel.android.engine.InstagramFeedAdShield
+import org.unreel.android.engine.InstagramHierarchyScanner
 import org.unreel.android.engine.InstagramModalDetector
 import org.unreel.android.engine.InstagramStoryAdDetector
 import org.unreel.android.engine.InstagramSuggestedPostSnoozer
 import org.unreel.android.overlay.TouchAbsorberOverlayService
 
 class UnreelAccessibilityService : AccessibilityService() {
+
+    internal var currentForegroundActivity: String? = null
+    internal var cachedTabBounds: android.graphics.Rect? = null
 
     internal var backDispatcher = DebouncedBackDispatcher(this)
     internal var suggestedPostSnoozer = InstagramSuggestedPostSnoozer()
@@ -99,11 +103,37 @@ class UnreelAccessibilityService : AccessibilityService() {
             if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
                 Log.d(TAG, "Navigated away from Instagram to $pkg, hiding overlay")
                 updateOverlay(false)
+                currentForegroundActivity = null
             }
             return
         }
 
         if (!isFilteringActive()) {
+            updateOverlay(false)
+            return
+        }
+
+        // Fast-Path 1 & 2: Instant Activity-level event evaluation (0ms Binder IPC overhead)
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            val className = event.className?.toString() ?: ""
+            if (className.isNotEmpty()) {
+                currentForegroundActivity = className
+            }
+            // Fast-Path 1: Entering ModalActivity (DMs or modal screens) -> instant detachment (0ms)
+            if (className.contains("ModalActivity")) {
+                Log.d(TAG, "Fast-path: Entered ModalActivity ($className) -> immediate overlay detachment (0ms)")
+                updateOverlay(false)
+                return
+            }
+            // Fast-Path 2: Returning to MainActivity with known tab bounds -> instant re-attachment (0ms)
+            if (className.contains("InstagramMainActivity") && cachedTabBounds != null) {
+                Log.d(TAG, "Fast-path: Returned to InstagramMainActivity with cached bounds $cachedTabBounds -> immediate re-attachment (0ms)")
+                updateOverlay(true, cachedTabBounds)
+            }
+        }
+
+        // Fast-Path 3: While active in ModalActivity (e.g. typing or scrolling inside DMs), skip all traversals
+        if (currentForegroundActivity?.contains("ModalActivity") == true) {
             updateOverlay(false)
             return
         }
@@ -118,14 +148,13 @@ class UnreelAccessibilityService : AccessibilityService() {
             return
         }
 
+        // Single-Pass Hierarchy Scan (Consolidates Clips, Reels Tab, Direct Thread, Modals, Splash & Bounds)
+        val scan = InstagramHierarchyScanner.scan(rootCompat)
+
         // 3. PRIORITY 0: Emergency Reels Interception
         // If the user lands on a Reel or selects the Reels tab, suppress IMMEDIATELY via Back action
-        // before spending cycles on overlay/modal maintenance or IPC calls.
-        val isClipsVisible = InstagramClipsDetector.isClipsContainerVisible(rootCompat)
-        val isReelsTabSelected = InstagramBottomNavDetector.isReelsTabSelected(rootCompat)
-
-        if (isClipsVisible || isReelsTabSelected) {
-            val trigger = if (isClipsVisible) {
+        if (scan.isClipsVisible || scan.isReelsTabSelected) {
+            val trigger = if (scan.isClipsVisible) {
                 ReelsInterceptEntity.TRIGGER_FULLSCREEN_CLIPS
             } else {
                 ReelsInterceptEntity.TRIGGER_BOTTOM_NAV_TAB
@@ -142,29 +171,21 @@ class UnreelAccessibilityService : AccessibilityService() {
 
         // 4. PRIORITY 1: Bottom Navigation Blackout Touch-Absorber Overlay
         // If user is inside a direct message conversation, hide overlay immediately
-        // and short-circuit further feed/story scanner passes.
-        val isDirectThread = InstagramBottomNavDetector.isDirectThreadActive(rootCompat)
-        if (isDirectThread) {
+        if (scan.isDirectThreadActive) {
             Log.d(TAG, "Direct thread active -> hiding overlay and short-circuiting feed processing")
             updateOverlay(false)
             return
         }
 
-        val isModalOpen = InstagramModalDetector.isModalOrDialogPresent(rootCompat)
-        val isSplashShowing = if (lastOverlayBounds == null || event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-            InstagramBottomNavDetector.isSplashScreenShowing(rootCompat)
-        } else {
-            false
-        }
-
-        if (isModalOpen || isSplashShowing) {
-            Log.d(TAG, "Suppression active: isModalOpen=$isModalOpen, isSplash=$isSplashShowing -> hiding overlay")
+        if (scan.isModalOpen || scan.isSplashScreenShowing) {
+            Log.d(TAG, "Suppression active: isModalOpen=${scan.isModalOpen}, isSplash=${scan.isSplashScreenShowing} -> hiding overlay")
             updateOverlay(false)
         } else {
-            val reelsBounds = InstagramBottomNavDetector.findReelsTabBounds(rootCompat)
-            Log.d(TAG, "Instagram active in foreground: reelsBounds=$reelsBounds")
+            val reelsBounds = scan.reelsTabBounds
+            Log.d(TAG, "Instagram active in foreground: reelsBounds=$reelsBounds (visited ${scan.nodesVisited} nodes)")
 
             if (reelsBounds != null) {
+                cachedTabBounds = reelsBounds
                 updateOverlay(true, reelsBounds)
             } else {
                 updateOverlay(false)
