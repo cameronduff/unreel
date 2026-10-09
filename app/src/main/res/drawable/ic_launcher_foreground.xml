@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Minimalist Outer Focus Ring -->
+    <path
+        android:strokeColor="#38BDF8"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:pathData="M54,28 A26,26 0 1,1 53.9,28 Z" />
+
+    <!-- Sleek Minimalist Unreel U Glyph -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="4.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M42,41 L42,57 A12,12 0 0,0 66,57 L66,41" />
+
+    <!-- Center Precision Reticle -->
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M54,44 A2.5,2.5 0 1,1 53.9,44 Z" />
+</vector>

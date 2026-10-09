@@ -62,3 +62,6 @@ By reading the accessibility node hierarchy locally on-device:
 | **[UNR-25]** | Automated GitHub Actions CI Matrix & Universal Release Distribution | `Done` | P2 - Medium | Packaging |
 | **[UNR-26]** | Cloud Device Farm Testing with Firebase Test Lab | `Done` | P3 - Low | Core / Engine |
 | **[UNR-27]** | YouTube Shorts Elimination Companion Module | `Draft` | P3 - Low | Accessibility |
+| **[UNR-28]** | Overlay Precision & DM Chat Suppression Engine Fix | `Done` | P0 - Blocker | Overlay |
+| **[UNR-29]** | Adaptive AMOLED & Monochromatic Launcher App Icon | `Done` | P1 - High | UI / Dashboard |
+| **[UNR-30]** | Adversarial Overlay Flashing & Direct Thread Validation Test Suite | `Done` | P1 - High | Overlay |

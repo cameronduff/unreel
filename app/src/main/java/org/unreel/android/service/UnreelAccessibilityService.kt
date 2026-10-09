@@ -141,19 +141,28 @@ class UnreelAccessibilityService : AccessibilityService() {
         }
 
         // 4. PRIORITY 1: Bottom Navigation Blackout Touch-Absorber Overlay
-        // Maintain blackout touch-absorber overlay over the Reels tab button
-        // During feed scroll when overlay is already attached, bottom nav bar is static; keep overlay without re-querying
-        if (event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED && lastOverlayState == true && lastOverlayBounds != null) {
-            // Static nav bar already covered; skip re-querying
+        // If user is inside a direct message conversation, hide overlay immediately
+        // and short-circuit further feed/story scanner passes.
+        val isDirectThread = InstagramBottomNavDetector.isDirectThreadActive(rootCompat)
+        if (isDirectThread) {
+            Log.d(TAG, "Direct thread active -> hiding overlay and short-circuiting feed processing")
+            updateOverlay(false)
+            return
+        }
+
+        val isModalOpen = InstagramModalDetector.isModalOrDialogPresent(rootCompat)
+        val isSplashShowing = if (lastOverlayBounds == null || event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            InstagramBottomNavDetector.isSplashScreenShowing(rootCompat)
         } else {
-            val isSplashShowing = if (lastOverlayBounds == null || event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-                InstagramBottomNavDetector.isSplashScreenShowing(rootCompat)
-            } else {
-                false
-            }
-            val isModalOpen = InstagramModalDetector.isModalOrDialogPresent(rootCompat)
-            val reelsBounds = if (!isModalOpen && !isSplashShowing) InstagramBottomNavDetector.findReelsTabBounds(rootCompat) else null
-            Log.d(TAG, "Instagram active in foreground: isSplash=$isSplashShowing, isModalOpen=$isModalOpen, reelsBounds=$reelsBounds")
+            false
+        }
+
+        if (isModalOpen || isSplashShowing) {
+            Log.d(TAG, "Suppression active: isModalOpen=$isModalOpen, isSplash=$isSplashShowing -> hiding overlay")
+            updateOverlay(false)
+        } else {
+            val reelsBounds = InstagramBottomNavDetector.findReelsTabBounds(rootCompat)
+            Log.d(TAG, "Instagram active in foreground: reelsBounds=$reelsBounds")
 
             if (reelsBounds != null) {
                 updateOverlay(true, reelsBounds)

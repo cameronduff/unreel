@@ -41,15 +41,14 @@ class TouchAbsorberOverlayService : Service() {
         val displayMetrics = resources.displayMetrics
         val screenWidth = displayMetrics.widthPixels.coerceAtLeast(1)
         val screenHeight = displayMetrics.heightPixels.coerceAtLeast(1)
-        val navBarHeight = (56 * displayMetrics.density).toInt().coerceAtLeast(1)
 
         val rect = targetRect
             ?: boundsCalculator?.invoke(screenWidth, screenHeight)
-            ?: OverlayPositionCalculator.calculateTabBounds(
-                screenWidthPx = screenWidth,
-                screenHeightPx = screenHeight,
-                navBarHeightPx = navBarHeight
-            )
+
+        if (rect == null) {
+            android.util.Log.w("TouchAbsorber", "attachOverlay requested without target bounds or calculator; skipping attachment")
+            return false
+        }
 
         android.util.Log.i("TouchAbsorber", "attachOverlay requested: targetRect=$targetRect, calculated=$rect, isAttached=$isOverlayAttached")
 
@@ -186,6 +185,10 @@ class TouchAbsorberOverlayService : Service() {
         internal var instance: TouchAbsorberOverlayService? = null
 
         fun show(context: Context, bounds: Rect? = null) {
+            if (bounds == null) {
+                android.util.Log.w("TouchAbsorber", "Cannot show overlay without explicit target bounds")
+                return
+            }
             val active = instance
             if (active != null) {
                 active.attachOverlay(bounds)
@@ -194,7 +197,7 @@ class TouchAbsorberOverlayService : Service() {
             try {
                 val intent = Intent(context, TouchAbsorberOverlayService::class.java).apply {
                     action = ACTION_ATTACH
-                    bounds?.let { putExtra(EXTRA_BOUNDS, it) }
+                    putExtra(EXTRA_BOUNDS, bounds)
                 }
                 context.startService(intent)
             } catch (_: Exception) {

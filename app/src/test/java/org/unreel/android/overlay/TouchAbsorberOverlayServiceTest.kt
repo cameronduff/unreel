@@ -72,11 +72,23 @@ class TouchAbsorberOverlayServiceTest {
     }
 
     @Test
+    fun testAttachOverlayFailsWhenBoundsNullAndNoCalculator() {
+        service.canDrawOverlaysCheck = { true }
+        service.boundsCalculator = null
+
+        val result = service.attachOverlay(null)
+
+        assertFalse(result)
+        assertFalse(service.isOverlayAttached)
+        assertNull(service.overlayView)
+    }
+
+    @Test
     fun testTouchSinkConsumesActionDown() {
         service.canDrawOverlaysCheck = { true }
         var callbackCalled = false
         service.onTouchAbsorbed = { callbackCalled = true }
-        service.attachOverlay()
+        service.attachOverlay(Rect(100, 100, 200, 200))
 
         val view = service.overlayView!!
         val now = SystemClock.uptimeMillis()
@@ -91,7 +103,7 @@ class TouchAbsorberOverlayServiceTest {
     @Test
     fun testOnDestroyRemovesViewAndCleansUp() {
         service.canDrawOverlaysCheck = { true }
-        service.attachOverlay()
+        service.attachOverlay(Rect(100, 100, 200, 200))
         assertTrue(service.isOverlayAttached)
         assertNotNull(service.overlayView)
 
