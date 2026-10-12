@@ -1,7 +1,9 @@
 package org.unreel.android.service
 
 import android.accessibilityservice.AccessibilityService
+import android.content.Context
 import android.util.Log
+import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
@@ -115,6 +117,7 @@ class UnreelAccessibilityService : AccessibilityService() {
         // Fast-Path 1: Instant Activity/Dialog-level detachment (0ms Binder IPC overhead)
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             val className = event.className?.toString() ?: ""
+            val previousActivity = currentForegroundActivity
             if (className.isNotEmpty()) {
                 currentForegroundActivity = className
             }
@@ -126,15 +129,39 @@ class UnreelAccessibilityService : AccessibilityService() {
                 updateOverlay(false)
                 return
             }
+
+            // Instant pre-emptive attachment on InstagramMainActivity launch or return from modal
+            if (className.contains("InstagramMainActivity") || className.contains("MainActivity")) {
+                val isReturningFromModal = previousActivity?.contains("ModalActivity") == true ||
+                                           previousActivity?.contains("Dialog", ignoreCase = true) == true ||
+                                           previousActivity?.contains("BottomSheet", ignoreCase = true) == true
+                val isColdLaunch = previousActivity == null || previousActivity.contains("Instagram") != true
+
+                if (isReturningFromModal || isColdLaunch) {
+                    val targetBounds = resolveDefaultOrCachedTabBounds()
+                    if (targetBounds != null) {
+                        Log.d(TAG, "Fast-path: Launch/return to InstagramMainActivity ($className) -> immediate pre-emptive attachment (0ms) at $targetBounds")
+                        updateOverlay(true, targetBounds)
+                    }
+                }
+            }
         }
 
-        // Fast-Path 2: Instant Pre-Emptive Detachment on Navigation & Subscreen Clicks (0ms)
+        // Fast-Path 2: Instant Pre-Emptive Detachment or Restoration on Navigation Clicks (0ms)
         if (event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED ||
             event.eventType == AccessibilityEvent.TYPE_VIEW_SELECTED) {
-            if (isNavigationalClick(event)) {
-                Log.d(TAG, "Fast-path 2: Navigational click/selection detected -> immediate overlay detachment (0ms)")
+            val navResult = checkNavigationalClick(event)
+            if (navResult == NavClickResult.DETACH) {
+                Log.d(TAG, "Fast-path 2: Navigation to subscreen detected -> immediate overlay detachment (0ms)")
                 updateOverlay(false)
                 return
+            } else if (navResult == NavClickResult.RESTORE) {
+                val targetBounds = resolveDefaultOrCachedTabBounds()
+                if (targetBounds != null) {
+                    Log.d(TAG, "Fast-path 2: Navigation Back to main feed detected -> immediate overlay restoration (0ms)")
+                    updateOverlay(true, targetBounds)
+                    return
+                }
             }
         }
 
@@ -149,7 +176,11 @@ class UnreelAccessibilityService : AccessibilityService() {
 
         if (rootCompat == null) {
             if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-                updateOverlay(false)
+                val isMain = currentForegroundActivity?.contains("InstagramMainActivity") == true ||
+                             currentForegroundActivity?.contains("MainActivity") == true
+                if (!isMain || lastOverlayState != true) {
+                    updateOverlay(false)
+                }
             }
             return
         }
@@ -179,13 +210,18 @@ class UnreelAccessibilityService : AccessibilityService() {
         if (scan.isModalOpen || scan.isSplashScreenShowing) {
             Log.d(TAG, "Suppression active: isModalOpen=${scan.isModalOpen}, isSplash=${scan.isSplashScreenShowing} -> hiding overlay")
             updateOverlay(false)
+        } else if (scan.reelsTabBounds != null) {
+            cachedTabBounds = scan.reelsTabBounds
+            Log.d(TAG, "Reels tab bounds discovered: ${scan.reelsTabBounds} -> attaching overlay")
+            updateOverlay(true, scan.reelsTabBounds)
+        } else if (scan.isDirectThreadActive) {
+            Log.d(TAG, "Direct thread active -> hiding overlay")
+            updateOverlay(false)
         } else {
-            val reelsBounds = scan.reelsTabBounds
-            Log.d(TAG, "Instagram active in foreground: reelsBounds=$reelsBounds (visited ${scan.nodesVisited} nodes)")
-
-            if (reelsBounds != null) {
-                cachedTabBounds = reelsBounds
-                updateOverlay(true, reelsBounds)
+            val fallbackBounds = cachedTabBounds
+            if (fallbackBounds != null) {
+                Log.d(TAG, "Transition state -> maintaining cached overlay at $fallbackBounds")
+                updateOverlay(true, fallbackBounds)
             } else {
                 updateOverlay(false)
             }
@@ -273,18 +309,49 @@ class UnreelAccessibilityService : AccessibilityService() {
                id.contains("audio") || id.contains("sound") || d.contains("mute")
     }
 
-    internal fun isNavigationalClick(event: AccessibilityEvent): Boolean {
-        if (event.eventType != AccessibilityEvent.TYPE_VIEW_CLICKED &&
-            event.eventType != AccessibilityEvent.TYPE_VIEW_SELECTED) return false
+    enum class NavClickResult {
+        NONE,
+        DETACH,
+        RESTORE
+    }
 
-        val source = event.source ?: resolveRootInActiveWindow() ?: return false
+    internal fun resolveDefaultOrCachedTabBounds(): android.graphics.Rect? {
+        val cached = cachedTabBounds
+        if (cached != null) {
+            return cached
+        }
+        val wm = getSystemService(Context.WINDOW_SERVICE) as? WindowManager
+        val realMetrics = android.util.DisplayMetrics()
+        wm?.defaultDisplay?.getRealMetrics(realMetrics)
+        val width = if (realMetrics.widthPixels > 0) realMetrics.widthPixels else resources.displayMetrics.widthPixels
+        val height = if (realMetrics.heightPixels > 0) realMetrics.heightPixels else resources.displayMetrics.heightPixels
+        if (width > 0 && height > 0) {
+            val navBarHeight = Math.round(height * 0.05641).toInt().coerceIn(120, 160)
+            val bottomInset = Math.round(height * 0.02821).toInt().coerceIn(0, 80)
+            val tabWidth = width / 5
+            val left = tabWidth * 1
+            val right = tabWidth * 2
+            val bottom = height - bottomInset
+            val top = bottom - navBarHeight
+            val calculated = android.graphics.Rect(left, top, right, bottom)
+            cachedTabBounds = calculated
+            return calculated
+        }
+        return null
+    }
+
+    internal fun checkNavigationalClick(event: AccessibilityEvent): NavClickResult {
+        if (event.eventType != AccessibilityEvent.TYPE_VIEW_CLICKED &&
+            event.eventType != AccessibilityEvent.TYPE_VIEW_SELECTED) return NavClickResult.NONE
+
+        val source = event.source ?: resolveRootInActiveWindow() ?: return NavClickResult.NONE
         val node = AccessibilityNodeInfoCompat.wrap(source)
 
         val desc = (node.contentDescription ?: event.contentDescription)?.toString() ?: ""
         val viewId = node.viewIdResourceName ?: ""
         val text = node.text?.toString() ?: ""
 
-        // 1. Navigation Back, Close, or Navigate Up buttons (always detach immediately)
+        // 1. Navigation Back, Close, or Navigate Up buttons -> RESTORE main feed overlay immediately!
         if (desc.equals("Back", ignoreCase = true) ||
             desc.equals("Close", ignoreCase = true) ||
             desc.equals("Navigate up", ignoreCase = true) ||
@@ -295,7 +362,7 @@ class UnreelAccessibilityService : AccessibilityService() {
             viewId.contains("action_bar_left_button", ignoreCase = true) ||
             viewId.contains("header_left_button", ignoreCase = true)
         ) {
-            return true
+            return NavClickResult.RESTORE
         }
 
         val clickBounds = android.graphics.Rect()
@@ -303,7 +370,7 @@ class UnreelAccessibilityService : AccessibilityService() {
 
         // Reject full-window root containers to prevent false matches
         if (event.source == null && clickBounds.height() > 1800 && clickBounds.width() > 900) {
-            return false
+            return NavClickResult.NONE
         }
 
         // 2. Bottom navigation bar tabs - maintain bottom bar state across tab switches
@@ -315,15 +382,37 @@ class UnreelAccessibilityService : AccessibilityService() {
             viewId.contains("tab_bar", ignoreCase = true) ||
             viewId.contains("tab_icon", ignoreCase = true)
         ) {
-            return false
+            return NavClickResult.NONE
         }
 
         val tabTop = cachedTabBounds?.top ?: 2100
         if (clickBounds.top >= (tabTop - 30) && clickBounds.height() > 0) {
-            return false
+            return NavClickResult.NONE
         }
 
-        // 3. Explicit Subscreen / Options Navigation Triggers
+        // 3. Ancestor check: Detect clicks inside inbox list (e.g. anonymous Compose/Litho thread rows)
+        var isInsideInboxList = false
+        var curr: AccessibilityNodeInfoCompat? = node
+        var depth = 0
+        while (curr != null && depth < 5) {
+            val pId = curr.viewIdResourceName ?: ""
+            if (pId.contains("inbox_refreshable_thread", ignoreCase = true) ||
+                pId.contains("row_inbox", ignoreCase = true) ||
+                pId.contains("direct_inbox", ignoreCase = true) ||
+                pId.contains("thread_container", ignoreCase = true)) {
+                isInsideInboxList = true
+                break
+            }
+            curr = curr.parent
+            depth++
+        }
+
+        // If clicking inside inbox thread list in the content area (above bottom bar, below header)
+        if (isInsideInboxList && clickBounds.top > 250 && clickBounds.top < (tabTop - 30)) {
+            return NavClickResult.DETACH
+        }
+
+        // 4. Explicit Subscreen / Options Navigation Triggers -> DETACH overlay!
         val isOptionsClick = desc.equals("Options", ignoreCase = true) ||
             viewId.contains("action_bar_button_options", ignoreCase = true) ||
             viewId.contains("options_button", ignoreCase = true) ||
@@ -344,11 +433,15 @@ class UnreelAccessibilityService : AccessibilityService() {
         val isHeaderDirectClick = desc.equals("Message", ignoreCase = true) && clickBounds.top < 400
 
         if (isOptionsClick || isCommentClick || isDirectChatClick || isHeaderDirectClick) {
-            return true
+            return NavClickResult.DETACH
         }
 
         // Standard feed interactions (photos, carousels, captions, likes, bookmarks) never detach overlay
-        return false
+        return NavClickResult.NONE
+    }
+
+    internal fun isNavigationalClick(event: AccessibilityEvent): Boolean {
+        return checkNavigationalClick(event) == NavClickResult.DETACH
     }
 
     internal fun dispatchTapGesture(x: Float, y: Float): Boolean {

@@ -507,5 +507,29 @@ Every ticket created in the database MUST contain:
        - Screen recording (`carousel_test.mp4`) frame analysis (`cframe_001.png`, `cframe_005.png`, `cframe_008.png`) confirmed the blackout box sits seamlessly over the Reels tab with zero flicker or logo bleed, appearing truly baked into the app.
        - Transitioning into DM conversation threads detaches cleanly, and Back navigation re-attaches directly at `Rect(216, 2142, 432, 2274)` with zero position jumping. All 179 unit tests pass.
 
+- **[2026-10-12 08:18:00] Discovery / Engineering Note**:
+  - Implemented [UNR-41] (Pre-Emptive Instant Overlay Attachment on Launch/Back & Inbox Thread Navigation Gating):
+    1. Root Cause Analysis:
+       - App cold/warm launch had a ~1s delay because on `TYPE_WINDOW_STATE_CHANGED` for `InstagramMainActivity`, `rootInActiveWindow` was null during window initialization; Unreel's fallback logic previously called `updateOverlay(false)` when `root == null`, stripping down the overlay until the full hierarchy rendered and triggered a content change event ~1 second later.
+       - Leaving DM threads (Back button) had a ~1s delay because during the fragment slide animation (~400ms), `scan.reelsTabBounds` was temporarily null while the outgoing thread view was sliding; the service previously treated `reelsTabBounds == null` as a full detachment request, causing the overlay to disappear during the transition and reappear ~1 second later when the animation settled. Additionally, `direct_inbox` and anonymous `ComposeView` nodes were mistakenly flagging the messages inbox as an active direct thread conversation (`isDirectThreadActive == true`), actively suppressing the overlay even when `reelsTabBounds` was present.
+       - Entering DMs caused the overlay to linger over the composer because modern Instagram inbox uses Jetpack Compose / Litho where conversation row items have empty view IDs and content descriptions; the previous navigational click check only inspected the direct node rather than traversing ancestors for the thread list recycler container (`inbox_refreshable_thread_list_recyclerview`).
+    2. Architecture & Implementation:
+       - Pre-Emptive Instant Attachment (`resolveDefaultOrCachedTabBounds`): Queries `WindowManager.defaultDisplay.getRealMetrics` to compute physical device tab 2 coordinates (`Rect(216, 2142, 432, 2274)` on Pixel 4a) on Frame 0, attaching before hierarchy parsing begins.
+       - Gated Fast-Path 1: Triggers pre-emptive attachment on `TYPE_WINDOW_STATE_CHANGED` when cold launching into `InstagramMainActivity` or returning from `ModalActivity`/Dialog/BottomSheet, while preserving overlay state when `rootCompat == null`.
+       - Navigational Click Dispatcher (`checkNavigationalClick`): Returns `NavClickResult.RESTORE` for Back/Close/Navigate Up buttons (immediate 0ms restoration), and `NavClickResult.DETACH` when tapping conversation rows in the inbox (using ancestor traversal up to depth 5 for `inbox_refreshable_thread`, `direct_inbox`, and content Y-bounds).
+       - 4-Branch Priority 1 Overlay Logic:
+         - Branch 1: `scan.isModalOpen || scan.isSplashScreenShowing` -> `updateOverlay(false)`.
+         - Branch 2: `scan.reelsTabBounds != null` -> updates cache & `updateOverlay(true, scan.reelsTabBounds)`.
+         - Branch 3: `scan.isDirectThreadActive` -> `updateOverlay(false)`.
+         - Branch 4: Screen transition / animation states -> maintains `cachedTabBounds` so overlay NEVER drops or blinks during back navigation slide animations.
+    3. Verification & Testing:
+       - 181 unit & integration tests passing (`./gradlew testDebugUnitTest`).
+       - Verified on physical Google Pixel 4a (`08241JEC213735`):
+         - Cold launch: Blackout box is attached from Frame 0 (<50ms, before UI renders, Reels tab never exposed).
+         - Messages inbox: Overlay remains firmly attached covering Reels tab (`Rect(216, 2142, 432, 2274)`).
+         - Enter DM thread: Overlay detaches immediately in 0ms (composer completely clear).
+         - Leave DM thread (Back): Overlay restores immediately in 0ms without delay or blinking.
+         - Horizontal carousel swipes: Zero blinking or flicker.
+
 
 

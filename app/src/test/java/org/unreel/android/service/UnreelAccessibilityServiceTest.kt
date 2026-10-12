@@ -540,11 +540,14 @@ class UnreelAccessibilityServiceTest {
     }
 
     @Test
-    fun testNavigationalClickOnBackButtonDetachesOverlayPreemptively() {
+    fun testNavigationalClickOnBackButtonRestoresOverlayPreemptively() {
         var overlayShown: Boolean? = null
-        service.overlayController = { show, _ ->
+        var restoredBounds: android.graphics.Rect? = null
+        service.overlayController = { show, bounds ->
             overlayShown = show
+            restoredBounds = bounds
         }
+        service.cachedTabBounds = android.graphics.Rect(216, 2142, 432, 2274)
 
         val backButton = MockAccessibilityNodeBuilder()
             .setViewId("com.instagram.android:id/action_bar_button_back")
@@ -559,7 +562,58 @@ class UnreelAccessibilityServiceTest {
         }
 
         service.onAccessibilityEvent(event)
-        assertEquals("Fast-path 2 must pre-emptively detach overlay on back button click", false, overlayShown)
+        assertEquals("Fast-path 2 must pre-emptively restore overlay when clicking back to feed", true, overlayShown)
+        assertEquals(android.graphics.Rect(216, 2142, 432, 2274), restoredBounds)
+    }
+
+    @Test
+    fun testWindowStateChangedOnInstagramMainActivityTriggersInstantAttachment() {
+        var overlayShown: Boolean? = null
+        var attachedBounds: android.graphics.Rect? = null
+        service.overlayController = { show, bounds ->
+            overlayShown = show
+            attachedBounds = bounds
+        }
+        service.cachedTabBounds = android.graphics.Rect(216, 2142, 432, 2274)
+
+        val event = AccessibilityEvent.obtain().apply {
+            packageName = UnreelAccessibilityService.TARGET_INSTAGRAM_PACKAGE
+            eventType = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+            className = "com.instagram.mainactivity.InstagramMainActivity"
+        }
+
+        service.onAccessibilityEvent(event)
+        assertEquals("Fast-path 1 must pre-emptively attach overlay on InstagramMainActivity", true, overlayShown)
+        assertEquals(android.graphics.Rect(216, 2142, 432, 2274), attachedBounds)
+    }
+
+    @Test
+    fun testAnonymousInboxThreadRowClickTriggersPreemptiveDetachment() {
+        var overlayShown: Boolean? = null
+        service.overlayController = { show, _ ->
+            overlayShown = show
+        }
+        service.cachedTabBounds = android.graphics.Rect(216, 2142, 432, 2274)
+
+        val inboxRecycler = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/inbox_refreshable_thread_list_recyclerview")
+            .setBounds(android.graphics.Rect(0, 290, 1080, 2142))
+            .addChild(
+                MockAccessibilityNodeBuilder()
+                    .setViewId("")
+                    .setBounds(android.graphics.Rect(0, 800, 1080, 1050))
+            )
+            .build()
+
+        service.rootNodeProvider = { inboxRecycler.getChild(0)?.unwrap() as? AccessibilityNodeInfo }
+
+        val event = AccessibilityEvent.obtain().apply {
+            packageName = UnreelAccessibilityService.TARGET_INSTAGRAM_PACKAGE
+            eventType = AccessibilityEvent.TYPE_VIEW_CLICKED
+        }
+
+        service.onAccessibilityEvent(event)
+        assertEquals("Click inside inbox thread list must pre-emptively detach overlay", false, overlayShown)
     }
 
     @Test
