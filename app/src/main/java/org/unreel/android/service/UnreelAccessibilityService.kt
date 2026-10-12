@@ -31,6 +31,7 @@ class UnreelAccessibilityService : AccessibilityService() {
 
     internal var currentForegroundActivity: String? = null
     internal var cachedTabBounds: android.graphics.Rect? = null
+    internal var isDirectInboxActive: Boolean = false
 
     internal var backDispatcher = DebouncedBackDispatcher(this)
     internal var suggestedPostSnoozer = InstagramSuggestedPostSnoozer()
@@ -65,6 +66,61 @@ class UnreelAccessibilityService : AccessibilityService() {
             TouchAbsorberOverlayService.show(this, bounds)
         } else {
             TouchAbsorberOverlayService.hide(this)
+        }
+    }
+
+    private val settleHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var settleTicksLeft = 0
+    private val settleRunnable = object : Runnable {
+        override fun run() {
+            if (settleTicksLeft <= 0) return
+            settleTicksLeft--
+            if (currentForegroundActivity?.contains("ModalActivity") == true) return
+            val root = resolveRootInActiveWindow()
+            if (root == null) {
+                settleHandler.postDelayed(this, SETTLE_POLL_MS)
+                return
+            }
+            val scan = InstagramHierarchyScanner.scan(AccessibilityNodeInfoCompat.wrap(root))
+            applyOverlayDecision(scan)
+            // Keep polling until the bar has settled (or timeout / modal took over).
+            if (scan.reelsTabBounds == null && !scan.isModalOpen) {
+                settleHandler.postDelayed(this, SETTLE_POLL_MS)
+            }
+        }
+    }
+
+    /** Events stop while Instagram's slide animation runs, so poll briefly to follow the tab bar until it settles. */
+    internal fun scheduleSettleRescan() {
+        settleTicksLeft = SETTLE_MAX_TICKS
+        settleHandler.removeCallbacks(settleRunnable)
+        settleHandler.postDelayed(settleRunnable, SETTLE_POLL_MS)
+    }
+
+    /**
+     * Single source of truth for the blackout box.
+     * Hide only on definitive evidence; follow the bar while it slides; otherwise hold the current state.
+     */
+    private fun applyOverlayDecision(scan: InstagramHierarchyScanner.ScanResult) {
+        isDirectInboxActive = scan.isDirectInbox
+        if (scan.isModalOpen || scan.isSplashScreenShowing) {
+            Log.d(TAG, "Suppression active: isModalOpen=${scan.isModalOpen}, isSplash=${scan.isSplashScreenShowing} -> hiding overlay")
+            updateOverlay(false)
+        } else if (scan.reelsTabBounds != null) {
+            cachedTabBounds = scan.reelsTabBounds
+            updateOverlay(true, scan.reelsTabBounds)
+        } else if (scan.animatingReelsTabBounds != null) {
+            // Bar is sliding: glue the box to the icon's current position so it looks baked into the app.
+            updateOverlay(true, scan.animatingReelsTabBounds)
+        } else if (scan.isSubscreenOrComposer) {
+            Log.d(TAG, "Hard subscreen/composer -> hiding overlay")
+            updateOverlay(false)
+        } else {
+            // Nothing new to learn this frame (tree not ready): hold whatever is currently shown.
+            val fallbackBounds = cachedTabBounds
+            if (lastOverlayState != true && fallbackBounds != null && currentForegroundActivity?.contains("ModalActivity") != true) {
+                updateOverlay(true, fallbackBounds)
+            }
         }
     }
 
@@ -106,6 +162,7 @@ class UnreelAccessibilityService : AccessibilityService() {
             Log.d(TAG, "Foreground package is $pkg (not Instagram), hiding overlay")
             updateOverlay(false)
             currentForegroundActivity = null
+            isDirectInboxActive = false
             return
         }
 
@@ -130,17 +187,20 @@ class UnreelAccessibilityService : AccessibilityService() {
                 return
             }
 
-            // Instant pre-emptive attachment on InstagramMainActivity launch or return from modal
+            // Instant pre-emptive attachment on a cold launch; on return from a modal just start following the bar.
             if (className.contains("InstagramMainActivity") || className.contains("MainActivity")) {
                 val isReturningFromModal = previousActivity?.contains("ModalActivity") == true ||
+                                           previousActivity == "returning-to-main" ||
                                            previousActivity?.contains("Dialog", ignoreCase = true) == true ||
                                            previousActivity?.contains("BottomSheet", ignoreCase = true) == true
-                val isColdLaunch = previousActivity == null || previousActivity.contains("Instagram") != true
+                val isColdLaunch = previousActivity == null || (previousActivity.contains("Instagram") != true && previousActivity != "returning-to-main")
 
-                if (isReturningFromModal || isColdLaunch) {
+                if (isReturningFromModal) {
+                    scheduleSettleRescan()
+                } else if (isColdLaunch) {
                     val targetBounds = resolveDefaultOrCachedTabBounds()
                     if (targetBounds != null) {
-                        Log.d(TAG, "Fast-path: Launch/return to InstagramMainActivity ($className) -> immediate pre-emptive attachment (0ms) at $targetBounds")
+                        Log.d(TAG, "Fast-path: Launch to InstagramMainActivity ($className) -> immediate pre-emptive attachment (0ms) at $targetBounds")
                         updateOverlay(true, targetBounds)
                     }
                 }
@@ -156,12 +216,14 @@ class UnreelAccessibilityService : AccessibilityService() {
                 updateOverlay(false)
                 return
             } else if (navResult == NavClickResult.RESTORE) {
-                val targetBounds = resolveDefaultOrCachedTabBounds()
-                if (targetBounds != null) {
-                    Log.d(TAG, "Fast-path 2: Navigation Back to main feed detected -> immediate overlay restoration (0ms)")
-                    updateOverlay(true, targetBounds)
-                    return
+                // Painting the box now would cover the chat that is still sliding out (the tab bar is not on screen
+                // yet). Instead: drop the stale modal marker and follow the tab bar from the first frame it exists.
+                Log.d(TAG, "Fast-path 2: Back detected -> tracking tab bar until settled")
+                if (currentForegroundActivity?.contains("ModalActivity") == true) {
+                    currentForegroundActivity = "returning-to-main"
                 }
+                scheduleSettleRescan()
+                return
             }
         }
 
@@ -175,13 +237,8 @@ class UnreelAccessibilityService : AccessibilityService() {
         val rootCompat = if (root != null) AccessibilityNodeInfoCompat.wrap(root) else null
 
         if (rootCompat == null) {
-            if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-                val isMain = currentForegroundActivity?.contains("InstagramMainActivity") == true ||
-                             currentForegroundActivity?.contains("MainActivity") == true
-                if (!isMain || lastOverlayState != true) {
-                    updateOverlay(false)
-                }
-            }
+            // Window is mid-transition (no tree yet). Never touch the overlay here: hiding on a null root is what
+            // made it drop out for ~1s on launch / on Back. The next event with a tree will decide.
             return
         }
 
@@ -207,24 +264,10 @@ class UnreelAccessibilityService : AccessibilityService() {
         }
 
         // 4. PRIORITY 1: Bottom Navigation Blackout Touch-Absorber Overlay
-        if (scan.isModalOpen || scan.isSplashScreenShowing) {
-            Log.d(TAG, "Suppression active: isModalOpen=${scan.isModalOpen}, isSplash=${scan.isSplashScreenShowing} -> hiding overlay")
-            updateOverlay(false)
-        } else if (scan.reelsTabBounds != null) {
-            cachedTabBounds = scan.reelsTabBounds
-            Log.d(TAG, "Reels tab bounds discovered: ${scan.reelsTabBounds} -> attaching overlay")
-            updateOverlay(true, scan.reelsTabBounds)
-        } else if (scan.isDirectThreadActive) {
-            Log.d(TAG, "Direct thread active -> hiding overlay")
-            updateOverlay(false)
-        } else {
-            val fallbackBounds = cachedTabBounds
-            if (fallbackBounds != null) {
-                Log.d(TAG, "Transition state -> maintaining cached overlay at $fallbackBounds")
-                updateOverlay(true, fallbackBounds)
-            } else {
-                updateOverlay(false)
-            }
+        applyOverlayDecision(scan)
+        if (scan.reelsTabBounds == null && scan.animatingReelsTabBounds != null) {
+            // Bar is mid-slide and Android will not emit further events until the next change: keep following it.
+            scheduleSettleRescan()
         }
 
         // 5. Auto-snooze suggested posts in feed (every 30 days)
@@ -374,23 +417,27 @@ class UnreelAccessibilityService : AccessibilityService() {
         }
 
         // 2. Bottom navigation bar tabs - maintain bottom bar state across tab switches
-        if (viewId.contains("feed_tab", ignoreCase = true) ||
+        val tabTop = cachedTabBounds?.top ?: 2100
+        val isBottomNavClick = (viewId.contains("feed_tab", ignoreCase = true) ||
             viewId.contains("clips_tab", ignoreCase = true) ||
             viewId.contains("direct_tab", ignoreCase = true) ||
             viewId.contains("search_tab", ignoreCase = true) ||
             viewId.contains("profile_tab", ignoreCase = true) ||
             viewId.contains("tab_bar", ignoreCase = true) ||
-            viewId.contains("tab_icon", ignoreCase = true)
-        ) {
+            viewId.contains("tab_icon", ignoreCase = true) ||
+            (clickBounds.top >= (tabTop - 30) && clickBounds.height() > 0))
+
+        if (isBottomNavClick) {
             return NavClickResult.NONE
         }
 
-        val tabTop = cachedTabBounds?.top ?: 2100
-        if (clickBounds.top >= (tabTop - 30) && clickBounds.height() > 0) {
-            return NavClickResult.NONE
+        // 3. In Direct Messages inbox: ANY tap outside the bottom navigation bar navigates to a chat or subscreen
+        if (isDirectInboxActive) {
+            Log.d(TAG, "Fast-path 2: Direct inbox tap outside bottom bar detected -> immediate overlay detachment (0ms)")
+            return NavClickResult.DETACH
         }
 
-        // 3. Ancestor check: Detect clicks inside inbox list (e.g. anonymous Compose/Litho thread rows)
+        // 4. Ancestor check: Detect clicks inside inbox list (e.g. anonymous Compose/Litho thread rows)
         var isInsideInboxList = false
         var curr: AccessibilityNodeInfoCompat? = node
         var depth = 0
@@ -495,5 +542,7 @@ class UnreelAccessibilityService : AccessibilityService() {
     companion object {
         const val TAG = "UnreelService"
         const val TARGET_INSTAGRAM_PACKAGE = "com.instagram.android"
+        private const val SETTLE_POLL_MS = 40L
+        private const val SETTLE_MAX_TICKS = 40 // ~1.6s upper bound
     }
 }

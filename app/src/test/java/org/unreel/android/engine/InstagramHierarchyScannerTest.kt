@@ -497,4 +497,61 @@ class InstagramHierarchyScannerTest {
         assertTrue("Thread composer must flag active direct thread", result.isDirectThreadActive)
         assertNull("Overlay must be suppressed on active direct thread composer", result.reelsTabBounds)
     }
+
+    @Test
+    fun testAnimatingTabBarDetectedDuringSlideTransition() {
+        val rootBuilder = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/main_layout")
+            .setBounds(Rect(0, 0, 1080, 2340))
+
+        // Tab bar mid-slide: left is 138 (not within -15..15), right is 1218
+        val tabBar = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/tab_bar")
+            .setBounds(Rect(138, 2142, 1218, 2274))
+            .setVisibleToUser(true)
+        tabBar.addChild(
+            MockAccessibilityNodeBuilder()
+                .setViewId("com.instagram.android:id/clips_tab")
+                .setContentDescription("Reels")
+                .setBounds(Rect(354, 2142, 570, 2274))
+                .setVisibleToUser(true)
+        )
+        rootBuilder.addChild(tabBar)
+
+        val result = InstagramHierarchyScanner.scan(rootBuilder.build())
+        assertNull("Settled tab bounds must be null while bar is sliding", result.reelsTabBounds)
+        assertNotNull("Animating tab bounds must track sliding bar", result.animatingReelsTabBounds)
+        assertEquals(Rect(354, 2142, 570, 2274), result.animatingReelsTabBounds)
+        assertFalse("Sliding bar is not a subscreen", result.isSubscreenOrComposer)
+    }
+
+    @Test
+    fun testSubscreenOrComposerDistinguishesHardSubscreensFromSoftInboxHints() {
+        // Soft hint (inbox recycler): isDirectThreadActive is true, but isSubscreenOrComposer is false
+        val inboxRoot = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/main_layout")
+            .setBounds(Rect(0, 0, 1080, 2340))
+        val inboxRecycler = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/inbox_refreshable_thread_list_recyclerview")
+            .setBounds(Rect(0, 290, 1080, 2142))
+            .setVisibleToUser(true)
+        inboxRoot.addChild(inboxRecycler)
+
+        val inboxResult = InstagramHierarchyScanner.scan(inboxRoot.build())
+        assertTrue("Inbox recycler triggers isDirectThreadActive hint", inboxResult.isDirectThreadActive)
+        assertFalse("Inbox recycler must NOT be considered a hard subscreen/composer", inboxResult.isSubscreenOrComposer)
+
+        // Hard subscreen (thread composer): isSubscreenOrComposer is true
+        val threadRoot = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/main_layout")
+            .setBounds(Rect(0, 0, 1080, 2340))
+        val composer = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/row_thread_composer_container")
+            .setVisibleToUser(true)
+        threadRoot.addChild(composer)
+
+        val threadResult = InstagramHierarchyScanner.scan(threadRoot.build())
+        assertTrue("Thread composer triggers isDirectThreadActive", threadResult.isDirectThreadActive)
+        assertTrue("Thread composer must be considered a hard subscreen/composer", threadResult.isSubscreenOrComposer)
+    }
 }

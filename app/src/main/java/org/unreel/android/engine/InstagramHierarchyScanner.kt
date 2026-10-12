@@ -14,10 +14,15 @@ object InstagramHierarchyScanner {
         val isClipsVisible: Boolean = false,
         val isReelsTabSelected: Boolean = false,
         val isDirectThreadActive: Boolean = false,
+        val isDirectInbox: Boolean = false,
         val isModalOpen: Boolean = false,
         val isSplashScreenShowing: Boolean = false,
         val reelsTabBounds: Rect? = null,
-        val nodesVisited: Int = 0
+        val nodesVisited: Int = 0,
+        /** True only for definitive full-screen subscreens (thread composer, back-button header). Inbox/Compose hints do NOT set this. */
+        val isSubscreenOrComposer: Boolean = false,
+        /** Reels tab position while the bar is still sliding (not yet settled). Used only to let the overlay follow the animation. */
+        val animatingReelsTabBounds: Rect? = null
     )
 
     /**
@@ -40,10 +45,12 @@ object InstagramHierarchyScanner {
         var isClips = false
         var isReelsTabSel = false
         var isDirect = false
+        var isDirectInbox = false
         var isSubscreenOrComposer = false
         var isModal = false
         var isSplash = false
         var tabBounds: Rect? = null
+        var animatingBounds: Rect? = null
 
         val queue = ArrayDeque<AccessibilityNodeInfoCompat>()
         queue.add(rootNode)
@@ -112,6 +119,7 @@ object InstagramHierarchyScanner {
                         viewId.contains("inbox_refreshable_thread", ignoreCase = true)
                     )) {
                         isDirect = true
+                        isDirectInbox = true
                         android.util.Log.d("UnreelScanner", "Matched inboxViewId: '$viewId'")
                     } else if (className != null && className.contains("ComposeView")) {
                         isDirect = true
@@ -169,6 +177,9 @@ object InstagramHierarchyScanner {
                         }
                         isSplash = false // If bottom nav bar is present, splash screen is definitely gone
                     }
+                } else if (animatingBounds == null && isNavBarNode(current, rootBounds, minBottomY, requireSettled = false)) {
+                    // Bar exists on screen but is still sliding in/out: remember where, so the overlay can follow it.
+                    animatingBounds = resolveReelsTabFromContainer(current, rootBounds).bounds
                 }
             }
 
@@ -209,7 +220,8 @@ object InstagramHierarchyScanner {
                     isModalOpen = isModal,
                     isSplashScreenShowing = false,
                     reelsTabBounds = null,
-                    nodesVisited = visitedCount
+                    nodesVisited = visitedCount,
+                    isSubscreenOrComposer = true
                 )
             }
 
@@ -225,17 +237,21 @@ object InstagramHierarchyScanner {
             isClipsVisible = isClips,
             isReelsTabSelected = isReelsTabSel,
             isDirectThreadActive = isDirect,
+            isDirectInbox = isDirectInbox,
             isModalOpen = isModal,
             isSplashScreenShowing = isSplash,
             reelsTabBounds = if (suppressOverlay) null else tabBounds,
-            nodesVisited = visitedCount
+            nodesVisited = visitedCount,
+            isSubscreenOrComposer = isSubscreenOrComposer,
+            animatingReelsTabBounds = if (isModal || isSplash) null else animatingBounds
         )
     }
 
     private fun isNavBarNode(
         node: AccessibilityNodeInfoCompat,
         rootBounds: Rect,
-        minBottomY: Double
+        minBottomY: Double,
+        requireSettled: Boolean = true
     ): Boolean {
         if (!node.isVisibleToUser) {
             return false
@@ -254,8 +270,11 @@ object InstagramHierarchyScanner {
         val inBottomZone = rootBounds.height() == 0 || rect.bottom >= minBottomY
         val isSettledHorizontally = rootBounds.width() == 0 || (rect.left in -15..15 && (rootBounds.right == 0 || rect.right >= (rootBounds.right - 15)))
 
-        if (!isSettledHorizontally) {
-            return false
+        if (requireSettled) {
+            if (!isSettledHorizontally) return false
+        } else {
+            // Tracking mode: bar is mid-slide; it only has to intersect the screen.
+            if (rootBounds.width() != 0 && !(rect.right > 0 && rect.left < rootBounds.right)) return false
         }
 
         if (isNavBarId && inBottomZone && node.childCount >= 1) {

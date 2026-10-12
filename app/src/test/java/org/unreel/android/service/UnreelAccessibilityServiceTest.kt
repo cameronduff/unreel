@@ -548,6 +548,7 @@ class UnreelAccessibilityServiceTest {
             restoredBounds = bounds
         }
         service.cachedTabBounds = android.graphics.Rect(216, 2142, 432, 2274)
+        service.currentForegroundActivity = "com.instagram.modal.ModalActivity"
 
         val backButton = MockAccessibilityNodeBuilder()
             .setViewId("com.instagram.android:id/action_bar_button_back")
@@ -562,7 +563,28 @@ class UnreelAccessibilityServiceTest {
         }
 
         service.onAccessibilityEvent(event)
-        assertEquals("Fast-path 2 must pre-emptively restore overlay when clicking back to feed", true, overlayShown)
+        assertEquals("Fast-path 2 must clear modal state to returning-to-main", "returning-to-main", service.currentForegroundActivity)
+
+        // When tab bar appears during settle poll, overlay attaches cleanly
+        val rootWithTabBar = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/main_layout")
+            .setBounds(android.graphics.Rect(0, 0, 1080, 2340))
+        val tabBar = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/tab_bar")
+            .setBounds(android.graphics.Rect(0, 2142, 1080, 2274))
+            .setVisibleToUser(true)
+        tabBar.addChild(
+            MockAccessibilityNodeBuilder()
+                .setViewId("com.instagram.android:id/clips_tab")
+                .setContentDescription("Reels")
+                .setBounds(android.graphics.Rect(216, 2142, 432, 2274))
+                .setVisibleToUser(true)
+        )
+        rootWithTabBar.addChild(tabBar)
+        service.rootNodeProvider = { rootWithTabBar.build().unwrap() as AccessibilityNodeInfo }
+
+        org.robolectric.shadows.ShadowLooper.runUiThreadTasksIncludingDelayedTasks()
+        assertEquals("Overlay must attach when tab bar appears during settle rescan", true, overlayShown)
         assertEquals(android.graphics.Rect(216, 2142, 432, 2274), restoredBounds)
     }
 
@@ -682,6 +704,142 @@ class UnreelAccessibilityServiceTest {
         }
 
         assertFalse("Carousel and photo interactions must NOT trigger pre-emptive detachment", service.isNavigationalClick(event))
+    }
+
+    @Test
+    fun testNullRootDuringWindowStateChangeDoesNotHideOverlay() {
+        var overlayShown: Boolean? = null
+        service.overlayController = { show, _ ->
+            overlayShown = show
+        }
+        service.cachedTabBounds = android.graphics.Rect(216, 2142, 432, 2274)
+        service.currentForegroundActivity = "com.instagram.mainactivity.InstagramMainActivity"
+        // Initially attached
+        service.rootNodeProvider = { null }
+
+        val event = AccessibilityEvent.obtain().apply {
+            packageName = UnreelAccessibilityService.TARGET_INSTAGRAM_PACKAGE
+            eventType = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+            className = "com.instagram.mainactivity.InstagramMainActivity"
+        }
+
+        service.onAccessibilityEvent(event)
+        // Null root during window transition must never hide the overlay (prevents 1s dropout)
+        assertFalse("Overlay must NOT be hidden when root is null during window state transition", overlayShown == false)
+    }
+
+    @Test
+    fun testAnimatingTabBarAttachesOverlayAtCurrentSlidePosition() {
+        var overlayShown: Boolean? = null
+        var attachedBounds: android.graphics.Rect? = null
+        service.overlayController = { show, bounds ->
+            overlayShown = show
+            attachedBounds = bounds
+        }
+
+        val root = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/main_layout")
+            .setBounds(android.graphics.Rect(0, 0, 1080, 2340))
+        // Tab bar mid-slide: left is 138 (not within -15..15)
+        val slidingTabBar = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/tab_bar")
+            .setBounds(android.graphics.Rect(138, 2142, 1218, 2274))
+            .setVisibleToUser(true)
+        slidingTabBar.addChild(
+            MockAccessibilityNodeBuilder()
+                .setViewId("com.instagram.android:id/clips_tab")
+                .setContentDescription("Reels")
+                .setBounds(android.graphics.Rect(354, 2142, 570, 2274))
+                .setVisibleToUser(true)
+        )
+        root.addChild(slidingTabBar)
+        service.rootNodeProvider = { root.build().unwrap() as AccessibilityNodeInfo }
+
+        val event = AccessibilityEvent.obtain().apply {
+            packageName = UnreelAccessibilityService.TARGET_INSTAGRAM_PACKAGE
+            eventType = AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+        }
+
+        service.onAccessibilityEvent(event)
+        assertTrue("Overlay must attach to animating tab bar position", overlayShown == true)
+        assertEquals(android.graphics.Rect(354, 2142, 570, 2274), attachedBounds)
+    }
+
+    @Test
+    fun testDirectInboxTapOutsideBottomBarTriggersInstantDetachment() {
+        var overlayShown: Boolean? = null
+        service.overlayController = { show, _ ->
+            overlayShown = show
+        }
+        service.cachedTabBounds = android.graphics.Rect(216, 2142, 432, 2274)
+        service.isDirectInboxActive = true
+
+        val anonymousComposeThreadRow = MockAccessibilityNodeBuilder()
+            .setBounds(android.graphics.Rect(0, 500, 1080, 700))
+            .setClickable(true)
+            .build()
+        service.rootNodeProvider = { anonymousComposeThreadRow.unwrap() as AccessibilityNodeInfo }
+
+        val event = AccessibilityEvent.obtain().apply {
+            packageName = UnreelAccessibilityService.TARGET_INSTAGRAM_PACKAGE
+            eventType = AccessibilityEvent.TYPE_VIEW_CLICKED
+        }
+
+        service.onAccessibilityEvent(event)
+        assertEquals("Clicking a conversation in the inbox must immediately detach overlay (0ms)", false, overlayShown)
+    }
+
+    @Test
+    fun testSettlePollingContinuesPastTransientSubscreenFramesUntilSettled() {
+        var overlayShown: Boolean? = null
+        var attachedBounds: android.graphics.Rect? = null
+        service.overlayController = { show, bounds ->
+            overlayShown = show
+            attachedBounds = bounds
+        }
+        service.cachedTabBounds = android.graphics.Rect(216, 2142, 432, 2274)
+        service.currentForegroundActivity = "returning-to-main"
+
+        // Tick 1: Root still contains lingering chat composer
+        val lingeringChatRoot = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/main_layout")
+            .setBounds(android.graphics.Rect(0, 0, 1080, 2340))
+        val composer = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/row_thread_composer_container")
+            .setVisibleToUser(true)
+        lingeringChatRoot.addChild(composer)
+
+        var currentRoot = lingeringChatRoot.build().unwrap() as AccessibilityNodeInfo
+        service.rootNodeProvider = { currentRoot }
+
+        service.scheduleSettleRescan()
+
+        // Settle poll tick 1 runs
+        org.robolectric.shadows.ShadowLooper.idleMainLooper(40, java.util.concurrent.TimeUnit.MILLISECONDS)
+        assertEquals("On tick 1 overlay should not attach while chat is still present", false, overlayShown ?: false)
+
+        // Tick 2: Chat has slid out, bottom navigation bar appears
+        val settledRoot = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/main_layout")
+            .setBounds(android.graphics.Rect(0, 0, 1080, 2340))
+        val tabBar = MockAccessibilityNodeBuilder()
+            .setViewId("com.instagram.android:id/tab_bar")
+            .setBounds(android.graphics.Rect(0, 2142, 1080, 2274))
+            .setVisibleToUser(true)
+        tabBar.addChild(
+            MockAccessibilityNodeBuilder()
+                .setViewId("com.instagram.android:id/clips_tab")
+                .setContentDescription("Reels")
+                .setBounds(android.graphics.Rect(216, 2142, 432, 2274))
+                .setVisibleToUser(true)
+        )
+        settledRoot.addChild(tabBar)
+        currentRoot = settledRoot.build().unwrap() as AccessibilityNodeInfo
+
+        // Settle poll tick 2 runs
+        org.robolectric.shadows.ShadowLooper.runUiThreadTasksIncludingDelayedTasks()
+        assertEquals("On tick 2 overlay must attach when tab bar appears", true, overlayShown)
+        assertEquals(android.graphics.Rect(216, 2142, 432, 2274), attachedBounds)
     }
 }
 

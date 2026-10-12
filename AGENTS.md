@@ -531,5 +531,27 @@ Every ticket created in the database MUST contain:
          - Leave DM thread (Back): Overlay restores immediately in 0ms without delay or blinking.
          - Horizontal carousel swipes: Zero blinking or flicker.
 
+- **[2026-10-12 09:25:00] Discovery / Engineering Note**:
+  - Implemented [UNR-42] (Seamless DM Transitions: Instant Inbox Detach & Continuous Settle Tracking):
+    1. Root Cause Analysis:
+       - Entering DMs caused the blackout box to linger over the incoming chat for ~1s because modern Instagram renders inbox conversation rows with Jetpack Compose (`androidx.compose.ui.platform.ComposeView`), where clicked nodes often emit `event.source == null` or have empty view IDs; `checkNavigationalClick` previously fell back to the root window (which was rejected due to full-screen bounds), failing to recognize conversation row taps and delaying detachment until `ModalActivity` was detected ~300-500ms later.
+       - Leaving DMs caused the blackout box to fail to reappear or delay for seconds because:
+         a) When clicking Back, the outgoing chat view and back button (`action_bar_button_back`) lingered in the window hierarchy during the slide transition, setting `isSubscreenOrComposer = true`.
+         b) `settleRunnable` previously had `if (scan.reelsTabBounds == null && !scan.isSubscreenOrComposer && !scan.isModalOpen)` which prematurely terminated polling on tick 1 (40ms) due to `!isSubscreenOrComposer` being false while the chat was still in the tree.
+         c) Instagram's compositor does not emit accessibility events when the slide animation completes, leaving the service idle and the Reels icon exposed indefinitely until user interaction.
+    2. Architecture & Implementation:
+       - Inbox State Tracking (`isDirectInbox` / `isDirectInboxActive`): Scanner marks `isDirectInbox = true` when `direct_inbox` or `inbox_refreshable_thread` is present. In `checkNavigationalClick`, any tap inside the inbox outside the bottom navigation bar (`!isBottomNavClick`) returns `NavClickResult.DETACH` immediately (0ms), detaching the overlay before the chat transition begins.
+       - Continuous Settle Polling: Removed `!isSubscreenOrComposer` from `settleRunnable` so polling continues past transient sliding frames every 40ms for up to 40 ticks (1.6s) until `scan.reelsTabBounds != null` settles.
+       - Dynamic Tab Bar Tracking (`animatingReelsTabBounds`): Prioritized `animatingReelsTabBounds` over lingering subscreen markers in `applyOverlayDecision` and decoupled `animatingReelsTabBounds` from `isSubscreenOrComposer`, allowing the blackout box to attach to the sliding bottom bar the moment it enters the screen.
+       - Null-root Protection: Suppressed blind detachment on null-root window transitions, preventing 1s dropouts during activity transitions.
+    3. Verification & Testing:
+       - 187 unit & integration tests passing (`./gradlew testDebugUnitTest`).
+       - Physical Pixel 4a (`08241JEC213735`) verification with frame-by-frame screen recording (`m_run_v2.mp4`):
+         - Entering DM: Overlay detaches at 0ms upon tapping any conversation, with zero blackout box visible over the chat or composer.
+         - Inside DM: Chat and composer completely clean with zero overlay interference.
+         - Leaving DM: Settle polling smoothly catches the arriving tab bar at `Rect(140, 2142, 356, 2274)` and updates to `Rect(216, 2142, 432, 2274)` without flapping or delay; zero frames expose the Reels icon.
+         - Feed carousel swipes: 100% static, rock-solid visibility with zero blinking.
+         - Cold launch: Pre-emptive Frame 0 attachment active.
+
 
 
